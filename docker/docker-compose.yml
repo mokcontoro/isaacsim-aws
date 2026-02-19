@@ -1,0 +1,70 @@
+services:
+  isaac-sim:
+    image: nvcr.io/nvidia/isaac-sim:4.2.0
+    container_name: isaac-sim
+    runtime: nvidia
+    environment:
+      - ACCEPT_EULA=Y
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      # ROS2 domain ID (must match ros2 container)
+      - ROS_DOMAIN_ID=0
+      # Use Cyclone DDS for reliable cross-container discovery
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    volumes:
+      - ./isaac-sim/startup.py:/app/startup.py:ro
+    entrypoint: ["./python.sh", "/app/startup.py"]
+    networks:
+      - rosnet
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  ros2:
+    build:
+      context: ./ros2
+      dockerfile: Dockerfile
+    container_name: ros2
+    environment:
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+    volumes:
+      - ./ros2/launch:/ros2_ws/launch:ro
+    command: ros2 launch /ros2_ws/launch/bringup.launch.py
+    networks:
+      - rosnet
+    depends_on:
+      - isaac-sim
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - frontend-dist:/usr/share/nginx/html:ro
+    networks:
+      - rosnet
+    depends_on:
+      - ros2
+
+  frontend-build:
+    image: node:20-alpine
+    container_name: frontend-build
+    working_dir: /app
+    volumes:
+      - ../frontend:/app:ro
+      - frontend-dist:/output
+    command: sh -c "npm ci && npm run build && cp -r dist/* /output/"
+
+volumes:
+  frontend-dist:
+
+networks:
+  rosnet:
+    driver: bridge
