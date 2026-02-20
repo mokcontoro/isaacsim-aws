@@ -1,6 +1,8 @@
 services:
   isaac-sim:
-    image: nvcr.io/nvidia/isaac-sim:4.2.0
+    build:
+      context: ./isaac-sim
+      dockerfile: Dockerfile
     container_name: isaac-sim
     runtime: nvidia
     environment:
@@ -11,9 +13,6 @@ services:
       - ROS_DOMAIN_ID=0
       # Use Cyclone DDS for reliable cross-container discovery
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-    volumes:
-      - ./isaac-sim/startup.py:/app/startup.py:ro
-    entrypoint: ["./python.sh", "/app/startup.py"]
     networks:
       - rosnet
     deploy:
@@ -52,6 +51,7 @@ services:
       - rosnet
     depends_on:
       - ros2
+      - frontend-build
 
   frontend-build:
     image: node:20-alpine

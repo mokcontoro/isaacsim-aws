@@ -15,6 +15,7 @@ export function TeleopPad({ speedScale }: TeleopPadProps) {
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
+      if (e.repeat) return;
       // Prevent page scroll on arrow keys
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
         e.preventDefault();

@@ -4,7 +4,6 @@ Runs headless, enables ROS2 bridge for camera, lidar, odom, and cmd_vel.
 """
 
 import sys
-import argparse
 
 # -- Isaac Sim startup (must happen before other omni imports) --
 from isaacsim import SimulationApp
@@ -45,13 +44,11 @@ turtlebot_usd = assets_root + "/Isaac/Robots/Turtlebot/turtlebot3_burger.usd"
 add_reference_to_stage(usd_path=turtlebot_usd, prim_path="/World/TurtleBot3")
 
 # Position the robot at warehouse entrance area
-from omni.isaac.core.utils.prims import set_prim_attribute_value
 from pxr import Gf
 import omni.usd
 stage = omni.usd.get_context().get_stage()
 turtlebot_prim = stage.GetPrimAtPath("/World/TurtleBot3")
 if turtlebot_prim.IsValid():
-    from omni.isaac.core.utils.transformations import set_prim_transform
     # Place robot at x=0, y=0, z=0 (ground level at warehouse entrance)
     omni.kit.commands.execute(
         "TransformPrimCommand",
@@ -85,11 +82,16 @@ import omni.graph.core as og
         og.Controller.Keys.SET_VALUES: [
             # cmd_vel subscriber
             ("DifferentialController.inputs:topicName", "/cmd_vel"),
+            # Differential drive controller (TurtleBot3 Burger parameters)
+            ("DiffDriveController.inputs:wheelDistance", 0.160),
+            ("DiffDriveController.inputs:wheelRadius", 0.033),
+            ("DiffDriveController.inputs:maxWheelSpeed", 6.67),
             # Odometry publisher
+            ("ComputeOdometry.inputs:chassisPrim", "/World/TurtleBot3"),
             ("PublishOdom.inputs:topicName", "/odom"),
             ("PublishOdom.inputs:frameId", "odom"),
             ("PublishOdom.inputs:chassisFrameId", "base_link"),
-            # Camera
+            # Camera (publish to /camera/image/compressed to match frontend)
             ("CameraHelper.inputs:topicName", "/camera/image"),
             ("CameraHelper.inputs:type", "rgb"),
             ("CameraHelper.inputs:enableSemanticLabels", False),
@@ -98,11 +100,16 @@ import omni.graph.core as og
             ("LidarHelper.inputs:frameId", "base_scan"),
         ],
         og.Controller.Keys.CONNECT: [
+            # Tick all nodes
             ("OnPlaybackTick.outputs:tick", "DifferentialController.inputs:execIn"),
+            ("OnPlaybackTick.outputs:tick", "DiffDriveController.inputs:execIn"),
             ("OnPlaybackTick.outputs:tick", "ComputeOdometry.inputs:execIn"),
             ("OnPlaybackTick.outputs:tick", "PublishOdom.inputs:execIn"),
             ("OnPlaybackTick.outputs:tick", "CameraHelper.inputs:execIn"),
             ("OnPlaybackTick.outputs:tick", "LidarHelper.inputs:execIn"),
+            # Wire twist subscriber output to differential drive controller
+            ("DifferentialController.outputs:linearVelocity", "DiffDriveController.inputs:linearVelocity"),
+            ("DifferentialController.outputs:angularVelocity", "DiffDriveController.inputs:angularVelocity"),
         ],
     },
 )

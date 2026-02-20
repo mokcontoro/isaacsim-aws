@@ -30,7 +30,7 @@ export const goalPoseTopic = new ROSLIB.Topic({
 
 // Video stream URL (MJPEG via web_video_server through Nginx)
 export const videoStreamUrl =
-  `/video/stream?topic=/camera/image/compressed&type=mjpeg&quality=80`;
+  `/video/stream?topic=/camera/image&type=mjpeg&quality=80`;
 
 // Publish a Twist message
 export function publishTwist(linear: number, angular: number) {
