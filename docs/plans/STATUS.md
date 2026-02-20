@@ -37,11 +37,21 @@ All code is written, reviewed, and committed. 14 commits on `master`.
 
 ### Task 16: Deploy & Smoke Test on AWS
 
-**Prerequisites the user needs to complete first:**
+**AWS setup already completed (on yunyo's work machine):**
+
+- AWS CLI installed
+- Terraform installed (path: `C:\Users\yunyo\AppData\Local\Microsoft\WinGet\Packages\Hashicorp.Terraform_Microsoft.Winget.Source_8wekyb3d8bbwe\terraform.exe`)
+- AWS credentials configured for `isaacsim-admin` user
+- SSH key pair created: `isaacsim-key` (private key at `~/.ssh/isaacsim-key.pem`)
+- Security group created on AWS: `sg-0c60813e47c2e7ec4`
+- **BLOCKED: GPU quota (G and VT instances) is 0 vCPUs. Request pending (ID: a213920cc34047fe88a87fcbc2414ccfQ2iJnSmP)**
+- Check quota status: `aws service-quotas get-requested-service-quota-change --request-id a213920cc34047fe88a87fcbc2414ccfQ2iJnSmP`
+
+**If deploying from a different machine, you need:**
 
 1. Install AWS CLI: `winget install Amazon.AWSCLI`
 2. Install Terraform: `winget install Hashicorp.Terraform`
-3. Configure AWS credentials: `aws configure` (Access Key, Secret Key, region `us-east-1`)
+3. Configure AWS credentials: `aws configure` (region: `us-east-1`)
 4. Create SSH key pair:
    ```bash
    aws ec2 create-key-pair --key-name isaacsim-key --query 'KeyMaterial' --output text > ~/.ssh/isaacsim-key.pem
