@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { goalPoseTopic } from '../lib/ros';
-import ROSLIB from 'roslib';
-
 export function NavGoal() {
   const [x, setX] = useState('0.0');
   const [y, setY] = useState('0.0');
 
   function sendGoal() {
-    const goal = new ROSLIB.Message({
+    goalPoseTopic.publish({
       header: {
         frame_id: 'map',
         stamp: { sec: 0, nanosec: 0 },
@@ -17,7 +15,6 @@ export function NavGoal() {
         orientation: { x: 0, y: 0, z: 0, w: 1 },
       },
     });
-    goalPoseTopic.publish(goal);
   }
 
   const inputStyle = {

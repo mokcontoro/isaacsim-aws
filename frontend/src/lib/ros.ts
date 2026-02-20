@@ -1,4 +1,4 @@
-import ROSLIB from 'roslib';
+import * as ROSLIB from 'roslib';
 
 // Connect to rosbridge via Nginx proxy
 const wsUrl = `ws://${window.location.host}/ws`;
@@ -34,11 +34,10 @@ export const videoStreamUrl =
 
 // Publish a Twist message
 export function publishTwist(linear: number, angular: number) {
-  const twist = new ROSLIB.Message({
+  cmdVelTopic.publish({
     linear: { x: linear, y: 0, z: 0 },
     angular: { x: 0, y: 0, z: angular },
   });
-  cmdVelTopic.publish(twist);
 }
 
 // Publish a zero-velocity stop command
