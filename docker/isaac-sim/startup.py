@@ -78,12 +78,12 @@ birdseye_prim = stage.DefinePrim(birdseye_path, "Camera")
 birdseye_xform = UsdGeom.Xformable(birdseye_prim)
 birdseye_xform.ClearXformOpOrder()
 # Position: directly above the robot, high enough to see surroundings
-birdseye_xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 3.0))
+birdseye_xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 1.2))
 # Look straight down (90 degrees pitch)
-birdseye_xform.AddRotateXYZOp().Set(Gf.Vec3f(0.0, 0.0, -90.0))
+birdseye_xform.AddRotateXYZOp().Set(Gf.Vec3f(90.0, 0.0, -90.0))
 # Wider FOV to see more of the warehouse
 birdseye_geom = UsdGeom.Camera(birdseye_prim)
-birdseye_geom.GetFocalLengthAttr().Set(10.0)
+birdseye_geom.GetFocalLengthAttr().Set(18.0)
 
 # Let the stage settle
 for _ in range(5):

@@ -5,16 +5,16 @@ export function CameraView() {
   const [birdseyeLoaded, setBirdseyeLoaded] = useState(false);
 
   return (
-    <div style={{ position: 'relative', width: '100%', background: '#1a1a1a' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#1a1a1a' }}>
       {/* Main chase camera */}
       <img
         src={videoStreamUrl}
         alt="Robot camera feed"
         style={{
           width: '100%',
-          height: 'auto',
+          height: '100%',
           display: 'block',
-          minHeight: '360px',
+          objectFit: 'cover',
         }}
         onError={(e) => {
           (e.target as HTMLImageElement).style.display = 'none';
@@ -24,10 +24,11 @@ export function CameraView() {
       {/* Bird's eye PiP overlay */}
       <div style={{
         position: 'absolute',
-        top: '8px',
-        right: '8px',
-        width: '220px',
-        height: '220px',
+        top: '12px',
+        right: '12px',
+        width: '180px',
+        height: '180px',
+        zIndex: 2,
         border: '2px solid rgba(255,255,255,0.6)',
         borderRadius: '6px',
         overflow: 'hidden',

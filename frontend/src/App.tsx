@@ -38,7 +38,7 @@ export function App() {
         overflow: 'hidden',
       }}>
         {/* Left: Camera feed */}
-        <div style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+        <div style={{ flex: 2, display: 'flex', overflow: 'hidden' }}>
           <CameraView />
         </div>
 
