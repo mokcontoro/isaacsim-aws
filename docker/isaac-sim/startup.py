@@ -58,18 +58,19 @@ if turtlebot_prim.IsValid():
     xform.ClearXformOpOrder()
     xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.0))
 
-# Add a camera above the robot looking down (bird's eye for initial view)
+# Add a camera attached to the robot (third-person chase cam)
 from pxr import Sdf
-camera_path = "/World/RobotCamera"
+camera_path = "/World/TurtleBot3/base_link/FollowCamera"
 camera_prim = stage.DefinePrim(camera_path, "Camera")
 camera_xform = UsdGeom.Xformable(camera_prim)
 camera_xform.ClearXformOpOrder()
-camera_xform.AddTranslateOp().Set(Gf.Vec3d(2.0, 2.0, 2.0))
-# Point camera toward origin
-camera_xform.AddRotateXYZOp().Set(Gf.Vec3f(-35.0, 0.0, 135.0))
-# Set focal length
+# Position: behind and above the robot (robot faces +X by default)
+camera_xform.AddTranslateOp().Set(Gf.Vec3d(-0.5, 0.0, 0.4))
+# Look forward and slightly down
+camera_xform.AddRotateXYZOp().Set(Gf.Vec3f(70.0, 0.0, -90.0))
+# Set focal length for wider field of view
 camera_geom = UsdGeom.Camera(camera_prim)
-camera_geom.GetFocalLengthAttr().Set(18.0)
+camera_geom.GetFocalLengthAttr().Set(14.0)
 
 # Let the stage settle
 for _ in range(5):
