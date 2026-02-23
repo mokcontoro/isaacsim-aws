@@ -4,6 +4,10 @@ Runs headless, enables ROS2 bridge for camera, odom, and cmd_vel.
 """
 
 import sys
+import os
+
+# Ensure stdout is unbuffered so print() shows in docker logs
+sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
 
 # -- Isaac Sim startup (must happen before other omni imports) --
 from isaacsim import SimulationApp
@@ -150,8 +154,13 @@ except Exception as e:
     print(f"WARNING: OmniGraph setup error: {e}", file=sys.stderr)
     print("Simulation will run but ROS2 topics may not work.", file=sys.stderr)
 
-# Reset and start the world
+# Reset and start the world (play starts the timeline so OnPlaybackTick fires)
 world.reset()
+world.play()
+
+# Let physics and OmniGraph settle
+for _ in range(10):
+    simulation_app.update()
 
 print("=== Isaac Sim scene ready. Simulation running. ===")
 
