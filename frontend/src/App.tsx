@@ -26,6 +26,9 @@ export function App() {
         fontWeight: 600,
       }}>
         Isaac Sim Remote Control
+        <span style={{ fontSize: '12px', fontWeight: 400, color: '#888', marginLeft: '12px' }}>
+          v0.2.0
+        </span>
       </header>
 
       {/* Main content */}

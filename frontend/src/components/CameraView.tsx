@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { videoStreamUrl, birdseyeStreamUrl } from '../lib/ros';
 
 export function CameraView() {
+  const [birdseyeLoaded, setBirdseyeLoaded] = useState(false);
+
   return (
     <div style={{ position: 'relative', width: '100%', background: '#1a1a1a' }}>
       {/* Main chase camera */}
@@ -23,36 +26,50 @@ export function CameraView() {
         position: 'absolute',
         top: '8px',
         right: '8px',
+        width: '220px',
+        height: '220px',
         border: '2px solid rgba(255,255,255,0.6)',
-        borderRadius: '4px',
+        borderRadius: '6px',
         overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-        background: '#000',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.6)',
+        background: '#222',
       }}>
         <div style={{
           position: 'absolute',
-          top: '2px',
-          left: '4px',
-          fontSize: '10px',
-          color: 'rgba(255,255,255,0.8)',
-          textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+          top: '4px',
+          left: '6px',
+          fontSize: '11px',
+          fontWeight: 600,
+          color: '#fff',
+          textShadow: '0 1px 3px rgba(0,0,0,0.9)',
           zIndex: 1,
           pointerEvents: 'none',
         }}>
           Bird's Eye
         </div>
+        {!birdseyeLoaded && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#666',
+            fontSize: '12px',
+          }}>
+            Loading...
+          </div>
+        )}
         <img
           src={birdseyeStreamUrl}
           alt="Bird's eye view"
           style={{
-            width: '200px',
-            height: '200px',
+            width: '100%',
+            height: '100%',
             display: 'block',
             objectFit: 'cover',
           }}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
+          onLoad={() => setBirdseyeLoaded(true)}
         />
       </div>
 
