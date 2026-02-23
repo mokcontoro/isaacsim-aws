@@ -72,16 +72,33 @@ camera_xform.AddRotateXYZOp().Set(Gf.Vec3f(70.0, 0.0, -90.0))
 camera_geom = UsdGeom.Camera(camera_prim)
 camera_geom.GetFocalLengthAttr().Set(14.0)
 
+# Add bird's eye camera following robot from above
+birdseye_path = "/World/TurtleBot3/base_link/BirdEyeCamera"
+birdseye_prim = stage.DefinePrim(birdseye_path, "Camera")
+birdseye_xform = UsdGeom.Xformable(birdseye_prim)
+birdseye_xform.ClearXformOpOrder()
+# Position: directly above the robot, high enough to see surroundings
+birdseye_xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 3.0))
+# Look straight down (90 degrees pitch)
+birdseye_xform.AddRotateXYZOp().Set(Gf.Vec3f(0.0, 0.0, -90.0))
+# Wider FOV to see more of the warehouse
+birdseye_geom = UsdGeom.Camera(birdseye_prim)
+birdseye_geom.GetFocalLengthAttr().Set(10.0)
+
 # Let the stage settle
 for _ in range(5):
     simulation_app.update()
 
-# Create render product for the camera
+# Create render products for both cameras
 import omni.replicator.core as rep
 render_product = rep.create.render_product(camera_path, (640, 480))
 render_product_path = render_product.path if hasattr(render_product, 'path') else str(render_product)
 
+birdseye_render = rep.create.render_product(birdseye_path, (320, 320))
+birdseye_render_path = birdseye_render.path if hasattr(birdseye_render, 'path') else str(birdseye_render)
+
 print(f"Render product path: {render_product_path}")
+print(f"Bird's eye render product path: {birdseye_render_path}")
 
 # -- Configure ROS2 components via OmniGraph --
 import omni.graph.core as og
@@ -107,8 +124,9 @@ try:
                 # Odometry
                 ("ComputeOdometry", "omni.isaac.core_nodes.IsaacComputeOdometry"),
                 ("PublishOdom", "omni.isaac.ros2_bridge.ROS2PublishOdometry"),
-                # Camera
+                # Cameras
                 ("CameraHelper", "omni.isaac.ros2_bridge.ROS2CameraHelper"),
+                ("BirdEyeCameraHelper", "omni.isaac.ros2_bridge.ROS2CameraHelper"),
             ],
             og.Controller.Keys.SET_VALUES: [
                 # Twist subscriber
@@ -126,12 +144,18 @@ try:
                 ("PublishOdom.inputs:topicName", "/odom"),
                 ("PublishOdom.inputs:odomFrameId", "odom"),
                 ("PublishOdom.inputs:chassisFrameId", "base_link"),
-                # Camera publisher
+                # Chase camera publisher
                 ("CameraHelper.inputs:topicName", "/camera/image"),
                 ("CameraHelper.inputs:type", "rgb"),
                 ("CameraHelper.inputs:renderProductPath", render_product_path),
                 ("CameraHelper.inputs:enableSemanticLabels", False),
                 ("CameraHelper.inputs:frameId", "camera_link"),
+                # Bird's eye camera publisher
+                ("BirdEyeCameraHelper.inputs:topicName", "/camera/birdseye"),
+                ("BirdEyeCameraHelper.inputs:type", "rgb"),
+                ("BirdEyeCameraHelper.inputs:renderProductPath", birdseye_render_path),
+                ("BirdEyeCameraHelper.inputs:enableSemanticLabels", False),
+                ("BirdEyeCameraHelper.inputs:frameId", "birdseye_link"),
             ],
             og.Controller.Keys.CONNECT: [
                 # Tick all nodes
@@ -141,6 +165,7 @@ try:
                 ("OnPlaybackTick.outputs:tick", "ComputeOdometry.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "PublishOdom.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "CameraHelper.inputs:execIn"),
+                ("OnPlaybackTick.outputs:tick", "BirdEyeCameraHelper.inputs:execIn"),
                 # Twist subscriber → break vectors → differential controller
                 # Linear: extract x component (forward velocity)
                 ("TwistSubscriber.outputs:linearVelocity", "BreakLinearVel.inputs:tuple"),
