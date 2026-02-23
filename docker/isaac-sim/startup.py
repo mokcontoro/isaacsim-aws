@@ -101,6 +101,8 @@ try:
                 ("BreakAngularVel", "omni.graph.nodes.BreakVector3"),
                 # Differential drive controller
                 ("DiffDriveController", "omni.isaac.wheeled_robots.DifferentialController"),
+                # Articulation controller (applies wheel velocities to robot joints)
+                ("ArticulationController", "omni.isaac.core_nodes.IsaacArticulationController"),
                 # Odometry
                 ("ComputeOdometry", "omni.isaac.core_nodes.IsaacComputeOdometry"),
                 ("PublishOdom", "omni.isaac.ros2_bridge.ROS2PublishOdometry"),
@@ -114,6 +116,9 @@ try:
                 ("DiffDriveController.inputs:wheelDistance", 0.160),
                 ("DiffDriveController.inputs:wheelRadius", 0.033),
                 ("DiffDriveController.inputs:maxWheelSpeed", 6.67),
+                # Articulation controller (applies to TurtleBot3 wheel joints)
+                ("ArticulationController.inputs:robotPath", "/World/TurtleBot3"),
+                ("ArticulationController.inputs:jointNames", ["wheel_left_joint", "wheel_right_joint"]),
                 # Odometry compute
                 ("ComputeOdometry.inputs:chassisPrim", "/World/TurtleBot3"),
                 # Odometry publisher
@@ -131,6 +136,7 @@ try:
                 # Tick all nodes
                 ("OnPlaybackTick.outputs:tick", "TwistSubscriber.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "DiffDriveController.inputs:execIn"),
+                ("OnPlaybackTick.outputs:tick", "ArticulationController.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "ComputeOdometry.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "PublishOdom.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "CameraHelper.inputs:execIn"),
@@ -141,6 +147,8 @@ try:
                 # Angular: extract z component (yaw rate)
                 ("TwistSubscriber.outputs:angularVelocity", "BreakAngularVel.inputs:tuple"),
                 ("BreakAngularVel.outputs:z", "DiffDriveController.inputs:angularVelocity"),
+                # Differential controller → articulation controller (apply to wheels)
+                ("DiffDriveController.outputs:velocityCommand", "ArticulationController.inputs:velocityCommand"),
                 # Odometry compute → publish
                 ("ComputeOdometry.outputs:position", "PublishOdom.inputs:position"),
                 ("ComputeOdometry.outputs:orientation", "PublishOdom.inputs:orientation"),
