@@ -11,8 +11,6 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       # ROS2 domain ID (must match ros2 container)
       - ROS_DOMAIN_ID=0
-      # Use Cyclone DDS for reliable cross-container discovery
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
     networks:
       - rosnet
     deploy:
@@ -30,7 +28,6 @@ services:
     container_name: ros2
     environment:
       - ROS_DOMAIN_ID=0
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
     volumes:
       - ./ros2/launch:/ros2_ws/launch:ro
     command: ros2 launch /ros2_ws/launch/bringup.launch.py
@@ -56,11 +53,10 @@ services:
   frontend-build:
     image: node:20-alpine
     container_name: frontend-build
-    working_dir: /app
     volumes:
-      - ../frontend:/app:ro
+      - ../frontend:/src:ro
       - frontend-dist:/output
-    command: sh -c "npm ci && npm run build && cp -r dist/* /output/"
+    command: sh -c "cp -r /src /app && cd /app && npm ci && npm run build && cp -r dist/* /output/"
 
 volumes:
   frontend-dist:

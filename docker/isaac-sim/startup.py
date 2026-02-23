@@ -44,17 +44,15 @@ turtlebot_usd = assets_root + "/Isaac/Robots/Turtlebot/turtlebot3_burger.usd"
 add_reference_to_stage(usd_path=turtlebot_usd, prim_path="/World/TurtleBot3")
 
 # Position the robot at warehouse entrance area
-from pxr import Gf
+from pxr import Gf, UsdGeom
 import omni.usd
 stage = omni.usd.get_context().get_stage()
 turtlebot_prim = stage.GetPrimAtPath("/World/TurtleBot3")
 if turtlebot_prim.IsValid():
     # Place robot at x=0, y=0, z=0 (ground level at warehouse entrance)
-    omni.kit.commands.execute(
-        "TransformPrimCommand",
-        path="/World/TurtleBot3",
-        new_translation=Gf.Vec3d(0.0, 0.0, 0.0),
-    )
+    xform = UsdGeom.Xformable(turtlebot_prim)
+    xform.ClearXformOpOrder()
+    xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.0))
 
 # -- Configure ROS2 components via Action Graphs --
 # Isaac Sim uses OmniGraph Action Graphs to wire sensors to ROS2 topics.
