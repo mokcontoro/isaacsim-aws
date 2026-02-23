@@ -93,8 +93,8 @@ try:
                 # Twist subscriber
                 ("TwistSubscriber", "omni.isaac.ros2_bridge.ROS2SubscribeTwist"),
                 # Break twist vectors into scalar components
-                ("BreakLinearVel", "omni.graph.nodes.BreakVector3Double"),
-                ("BreakAngularVel", "omni.graph.nodes.BreakVector3Double"),
+                ("BreakLinearVel", "omni.graph.nodes.BreakVector3"),
+                ("BreakAngularVel", "omni.graph.nodes.BreakVector3"),
                 # Differential drive controller
                 ("DiffDriveController", "omni.isaac.wheeled_robots.DifferentialController"),
                 # Odometry
