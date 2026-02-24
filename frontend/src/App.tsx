@@ -27,7 +27,7 @@ export function App() {
       }}>
         Isaac Sim Remote Control
         <span style={{ fontSize: '12px', fontWeight: 400, color: '#888', marginLeft: '12px' }}>
-          v0.3.0
+          v0.4.0
         </span>
       </header>
 

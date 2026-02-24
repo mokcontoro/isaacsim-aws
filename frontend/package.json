@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@nvidia/omniverse-webrtc-streaming-library": "^5.17.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "roslib": "^2.0.1"

@@ -1,7 +1,8 @@
 """
 Isaac Sim 5.0 standalone script: warehouse scene with TurtleBot3 Burger.
 Runs headless with WebRTC signaling server.
-Enables ROS2 bridge for cameras (MJPEG chase + bird's eye), odom, and cmd_vel.
+Enables ROS2 bridge for chase camera (MJPEG), odom, and cmd_vel.
+WebRTC provides interactive 3D god-view; MJPEG chase cam is a PiP overlay.
 """
 
 import sys
@@ -91,21 +92,9 @@ camera_xform.AddRotateXYZOp().Set(Gf.Vec3f(70.0, 0.0, -90.0))
 camera_geom = UsdGeom.Camera(camera_prim)
 camera_geom.GetFocalLengthAttr().Set(14.0)
 
-# Bird's eye camera (follows robot from directly above)
-birdseye_path = "/World/BirdEyeCamera"
-birdseye_prim = stage.DefinePrim(birdseye_path, "Camera")
-birdseye_xform = UsdGeom.Xformable(birdseye_prim)
-birdseye_xform.ClearXformOpOrder()
-birdseye_xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 1.2))
-birdseye_xform.AddRotateXYZOp().Set(Gf.Vec3f(90.0, 0.0, -90.0))
-birdseye_geom = UsdGeom.Camera(birdseye_prim)
-birdseye_geom.GetFocalLengthAttr().Set(18.0)
-
 # Camera offsets relative to robot
 CHASE_CAM_OFFSET = Gf.Vec3d(-0.5, 0.0, 0.4)   # behind and above
 CHASE_CAM_ROTATE = Gf.Vec3f(70.0, 0.0, -90.0)  # looking forward-down
-BIRDSEYE_OFFSET = Gf.Vec3d(0.0, 0.0, 1.2)      # directly above
-BIRDSEYE_ROTATE = Gf.Vec3f(90.0, 0.0, -90.0)    # looking straight down
 
 # -- Create World and initialize physics BEFORE OmniGraph --
 world = World(stage_units_in_meters=1.0)
@@ -120,11 +109,7 @@ import omni.replicator.core as rep
 render_product = rep.create.render_product(camera_path, (640, 480))
 render_product_path = render_product.path if hasattr(render_product, 'path') else str(render_product)
 
-birdseye_render = rep.create.render_product(birdseye_path, (320, 320))
-birdseye_render_path = birdseye_render.path if hasattr(birdseye_render, 'path') else str(birdseye_render)
-
 print(f"Render product path: {render_product_path}")
-print(f"Bird's eye render product path: {birdseye_render_path}")
 
 # -- Configure ROS2 components via OmniGraph --
 import omni.graph.core as og
@@ -145,7 +130,6 @@ try:
                 ("ComputeOdometry", "isaacsim.core.nodes.IsaacComputeOdometry"),
                 ("PublishOdom", "isaacsim.ros2.bridge.ROS2PublishOdometry"),
                 ("CameraHelper", "isaacsim.ros2.bridge.ROS2CameraHelper"),
-                ("BirdEyeCameraHelper", "isaacsim.ros2.bridge.ROS2CameraHelper"),
             ],
             og.Controller.Keys.SET_VALUES: [
                 ("TwistSubscriber.inputs:topicName", "/cmd_vel"),
@@ -163,11 +147,6 @@ try:
                 ("CameraHelper.inputs:renderProductPath", render_product_path),
                 ("CameraHelper.inputs:enableSemanticLabels", False),
                 ("CameraHelper.inputs:frameId", "camera_link"),
-                ("BirdEyeCameraHelper.inputs:topicName", "/camera/birdseye"),
-                ("BirdEyeCameraHelper.inputs:type", "rgb"),
-                ("BirdEyeCameraHelper.inputs:renderProductPath", birdseye_render_path),
-                ("BirdEyeCameraHelper.inputs:enableSemanticLabels", False),
-                ("BirdEyeCameraHelper.inputs:frameId", "birdseye_link"),
             ],
             og.Controller.Keys.CONNECT: [
                 ("OnPlaybackTick.outputs:tick", "TwistSubscriber.inputs:execIn"),
@@ -175,7 +154,6 @@ try:
                 ("OnPlaybackTick.outputs:tick", "ArticulationController.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "ComputeOdometry.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "CameraHelper.inputs:execIn"),
-                ("OnPlaybackTick.outputs:tick", "BirdEyeCameraHelper.inputs:execIn"),
                 ("TwistSubscriber.outputs:linearVelocity", "BreakLinearVel.inputs:tuple"),
                 ("BreakLinearVel.outputs:x", "DiffDriveController.inputs:linearVelocity"),
                 ("TwistSubscriber.outputs:angularVelocity", "BreakAngularVel.inputs:tuple"),
@@ -212,8 +190,6 @@ from omni.isaac.dynamic_control import _dynamic_control
 
 chase_translate_op = camera_xform.GetOrderedXformOps()[0]
 chase_rotate_op = camera_xform.GetOrderedXformOps()[1]
-birdseye_translate_op = birdseye_xform.GetOrderedXformOps()[0]
-birdseye_rotate_op = birdseye_xform.GetOrderedXformOps()[1]
 
 dc = _dynamic_control.acquire_dynamic_control_interface()
 # TurtleBot3 prim hierarchy: /World/TurtleBot3/base_footprint/base_link
@@ -222,8 +198,8 @@ rb_handle = dc.get_rigid_body("/World/TurtleBot3/base_footprint")
 print(f"DC rigid body handle valid: {rb_handle != _dynamic_control.INVALID_HANDLE}")
 
 
-def update_cameras():
-    """Move cameras to follow the robot using Dynamic Control (PhysX) transforms."""
+def update_chase_camera():
+    """Move chase camera to follow the robot using Dynamic Control (PhysX) transforms."""
     pose = dc.get_rigid_body_pose(rb_handle)
     robot_pos = (pose.p.x, pose.p.y, pose.p.z)
 
@@ -236,7 +212,6 @@ def update_cameras():
     cos_y = math.cos(yaw)
     sin_y = math.sin(yaw)
 
-    # Chase camera: offset rotated by robot yaw
     cx, cy = CHASE_CAM_OFFSET[0], CHASE_CAM_OFFSET[1]
     chase_translate_op.Set(Gf.Vec3d(
         robot_pos[0] + cx * cos_y - cy * sin_y,
@@ -250,24 +225,11 @@ def update_cameras():
         CHASE_CAM_ROTATE[2] + yaw_deg,
     ))
 
-    # Bird's eye camera: directly above robot
-    bx, by = BIRDSEYE_OFFSET[0], BIRDSEYE_OFFSET[1]
-    birdseye_translate_op.Set(Gf.Vec3d(
-        robot_pos[0] + bx * cos_y - by * sin_y,
-        robot_pos[1] + bx * sin_y + by * cos_y,
-        robot_pos[2] + BIRDSEYE_OFFSET[2],
-    ))
-    birdseye_rotate_op.Set(Gf.Vec3f(
-        BIRDSEYE_ROTATE[0],
-        BIRDSEYE_ROTATE[1],
-        BIRDSEYE_ROTATE[2] + yaw_deg,
-    ))
-
 
 # Main simulation loop — update cameras between physics and render
 while simulation_app.is_running():
     world.step(render=False)   # Physics only
-    update_cameras()           # Move cameras to follow robot
+    update_chase_camera()      # Move chase camera to follow robot
     simulation_app.update()    # Render with updated camera positions
 
 simulation_app.close()
