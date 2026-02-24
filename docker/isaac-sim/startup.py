@@ -224,8 +224,8 @@ for _ in range(10):
 print("=== Isaac Sim scene ready. WebRTC streaming on port 49100. ===")
 
 # -- Camera follow helper --
-# Get xform ops for each camera (translate and rotate)
 import math
+from pxr import Usd
 
 chase_translate_op = camera_xform.GetOrderedXformOps()[0]
 chase_rotate_op = camera_xform.GetOrderedXformOps()[1]
@@ -233,21 +233,31 @@ birdseye_translate_op = birdseye_xform.GetOrderedXformOps()[0]
 birdseye_rotate_op = birdseye_xform.GetOrderedXformOps()[1]
 
 base_link_prim = stage.GetPrimAtPath("/World/TurtleBot3/base_link")
+if not base_link_prim.IsValid():
+    print("WARNING: /World/TurtleBot3/base_link not found! Trying /World/TurtleBot3")
+    base_link_prim = stage.GetPrimAtPath("/World/TurtleBot3")
+print(f"Camera follow target prim: {base_link_prim.GetPath()}, valid={base_link_prim.IsValid()}")
+
+_diag_counter = 0
 
 def update_cameras():
     """Move cameras to follow the robot's base_link each frame."""
+    global _diag_counter
     if not base_link_prim.IsValid():
         return
 
-    # Get the robot base_link world transform
+    # Use Usd.TimeCode.Default() to get the physics-updated transform
     bl_xformable = UsdGeom.Xformable(base_link_prim)
-    world_mtx = bl_xformable.ComputeLocalToWorldTransform(0)
+    world_mtx = bl_xformable.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
 
-    # Extract robot position and yaw from world matrix
     robot_pos = world_mtx.ExtractTranslation()
-    # Extract yaw angle from the rotation matrix (Z-up)
     r = world_mtx.ExtractRotationMatrix()
     yaw = math.atan2(r[1][0], r[0][0])
+
+    # Diagnostic: print every 500 frames
+    _diag_counter += 1
+    if _diag_counter <= 3 or _diag_counter % 500 == 0:
+        print(f"[cam] frame={_diag_counter} robot=({robot_pos[0]:.3f},{robot_pos[1]:.3f},{robot_pos[2]:.3f}) yaw={math.degrees(yaw):.1f}")
 
     cos_y = math.cos(yaw)
     sin_y = math.sin(yaw)
@@ -286,9 +296,10 @@ def update_cameras():
     birdseye_rotate_op.Set(birdseye_rot)
 
 
-# Main simulation loop
+# Main simulation loop — update cameras BEFORE render
 while simulation_app.is_running():
-    world.step(render=True)
-    update_cameras()
+    world.step(render=False)   # Physics only
+    update_cameras()           # Move cameras to follow robot
+    simulation_app.update()    # Render with updated camera positions
 
 simulation_app.close()
