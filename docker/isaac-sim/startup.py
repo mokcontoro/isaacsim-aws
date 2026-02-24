@@ -116,6 +116,7 @@ print(f"Bird's eye render product path: {birdseye_render_path}")
 
 # -- Configure ROS2 components via OmniGraph --
 import omni.graph.core as og
+import usdrt.Sdf
 
 try:
     (ros2_graph, nodes, _, _) = og.Controller.edit(
@@ -123,6 +124,7 @@ try:
         {
             og.Controller.Keys.CREATE_NODES: [
                 ("OnPlaybackTick", "omni.graph.action.OnPlaybackTick"),
+                ("ReadSimTime", "isaacsim.core.nodes.IsaacReadSimulationTime"),
                 # Twist subscriber
                 ("TwistSubscriber", "isaacsim.ros2.bridge.ROS2SubscribeTwist"),
                 # Break twist vectors into scalar components
@@ -147,10 +149,10 @@ try:
                 ("DiffDriveController.inputs:wheelRadius", 0.033),
                 ("DiffDriveController.inputs:maxWheelSpeed", 6.67),
                 # Articulation controller (applies to TurtleBot3 wheel joints)
-                ("ArticulationController.inputs:robotPath", "/World/TurtleBot3"),
+                ("ArticulationController.inputs:targetPrim", [usdrt.Sdf.Path("/World/TurtleBot3")]),
                 ("ArticulationController.inputs:jointNames", ["wheel_left_joint", "wheel_right_joint"]),
-                # Odometry compute
-                ("ComputeOdometry.inputs:chassisPrim", "/World/TurtleBot3"),
+                # Odometry compute (chassisPrim is a rel type in 5.0)
+                ("ComputeOdometry.inputs:chassisPrim", [usdrt.Sdf.Path("/World/TurtleBot3")]),
                 # Odometry publisher
                 ("PublishOdom.inputs:topicName", "/odom"),
                 ("PublishOdom.inputs:odomFrameId", "odom"),
@@ -169,12 +171,11 @@ try:
                 ("BirdEyeCameraHelper.inputs:frameId", "birdseye_link"),
             ],
             og.Controller.Keys.CONNECT: [
-                # Tick all nodes
+                # Tick nodes
                 ("OnPlaybackTick.outputs:tick", "TwistSubscriber.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "DiffDriveController.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "ArticulationController.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "ComputeOdometry.inputs:execIn"),
-                ("OnPlaybackTick.outputs:tick", "PublishOdom.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "CameraHelper.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "BirdEyeCameraHelper.inputs:execIn"),
                 # Twist subscriber → break vectors → differential controller
@@ -184,11 +185,14 @@ try:
                 ("BreakAngularVel.outputs:z", "DiffDriveController.inputs:angularVelocity"),
                 # Differential controller → articulation controller (apply to wheels)
                 ("DiffDriveController.outputs:velocityCommand", "ArticulationController.inputs:velocityCommand"),
-                # Odometry compute → publish
+                # Odometry: chain ComputeOdometry → PublishOdom (execOut → execIn)
+                ("ComputeOdometry.outputs:execOut", "PublishOdom.inputs:execIn"),
                 ("ComputeOdometry.outputs:position", "PublishOdom.inputs:position"),
                 ("ComputeOdometry.outputs:orientation", "PublishOdom.inputs:orientation"),
                 ("ComputeOdometry.outputs:linearVelocity", "PublishOdom.inputs:linearVelocity"),
                 ("ComputeOdometry.outputs:angularVelocity", "PublishOdom.inputs:angularVelocity"),
+                # Timestamps from simulation time
+                ("ReadSimTime.outputs:simulationTime", "PublishOdom.inputs:timeStamp"),
             ],
         },
     )
