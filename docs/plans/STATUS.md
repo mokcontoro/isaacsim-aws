@@ -6,22 +6,22 @@
 
 ---
 
-## Current State: Nearly Working End-to-End
+## Current State: Camera UX Complete, Pre-Deploy Fixes Pending
 
-The system deploys and runs on AWS g5.xlarge. Camera feed streams to the browser, robot responds to cmd_vel. The web UI loads but the rosbridge WebSocket shows "Disconnected" due to two issues being fixed (see Remaining Fixes below).
+The system deploys and runs on AWS g5.xlarge. Camera feed streams to the browser with third-person chase view and bird's eye picture-in-picture overlay. Robot responds to cmd_vel. The web UI loads but the rosbridge WebSocket shows "Disconnected" due to a DDS mismatch (see Remaining Fixes below). The nginx proxy path fix has been applied locally.
 
 ### What Works (verified on EC2)
 - Isaac Sim 4.2 headless with TurtleBot3 Burger in warehouse scene
 - OmniGraph ROS2 pipeline: cmd_vel → DifferentialController → ArticulationController → wheel joints
 - Camera streaming at 640x480 via ROS2CameraHelper → web_video_server → nginx `/video/`
+- Third-person chase camera attached to robot
+- Bird's eye camera with picture-in-picture overlay (`/camera/birdseye`)
 - Odometry publishing via IsaacComputeOdometry → ROS2PublishOdometry
 - Robot movement verified: sent 0.1 m/s for 3s, robot moved to x=0.311
-- Frontend loads in browser with camera feed (warehouse floor visible)
+- Frontend loads in browser with camera feed, version display in header
 
 ### What's Broken
-1. **Rosbridge WebSocket "Disconnected"** — Two root causes:
-   - **nginx proxy path**: `proxy_pass http://rosbridge;` forwards `/ws` path to rosbridge, but rosbridge expects `/`. **FIX APPLIED locally**: changed to `proxy_pass http://rosbridge/;` (trailing slash strips path). Deployed to EC2 and nginx restarted, but not yet verified in browser.
-   - **DDS mismatch**: ROS2 container uses `rmw_cyclonedds_cpp`, Isaac Sim uses `rmw_fastrtps_cpp`. Topics won't be visible across containers. **FIX NEEDED**: remove Cyclone DDS from ROS2 Dockerfile (see below).
+1. **Rosbridge WebSocket "Disconnected"** — DDS mismatch: ROS2 container uses `rmw_cyclonedds_cpp`, Isaac Sim uses `rmw_fastrtps_cpp`. Topics won't be visible across containers. **FIX NEEDED**: remove Cyclone DDS from ROS2 Dockerfile (see below).
 
 ---
 
@@ -98,6 +98,13 @@ All code written, reviewed, committed. 20+ commits on `master`.
 4. `fix: use correct BreakVector3 node type (not BreakVector3Double)`
 5. `fix: add world.play() and unbuffered stdout for Isaac Sim`
 6. `fix: add ArticulationController to apply wheel velocities to robot`
+
+### Camera UX Improvements (2026-02-23)
+
+7. `feat: attach camera to robot for third-person chase view`
+8. `feat: add bird's eye camera with picture-in-picture overlay`
+9. `fix: bird's eye PiP loading + add version to header`
+10. `fix: bird's eye camera rotation + fill camera view area`
 
 ---
 
@@ -194,7 +201,8 @@ isaac-sim container (GPU)          ros2 container
   │   ├── ArticulationController
   │   ├── IsaacComputeOdometry
   │   ├── ROS2PublishOdometry (/odom)
-  │   └── ROS2CameraHelper (/camera/image)
+  │   ├── ROS2CameraHelper (/camera/image)
+  │   └── ROS2CameraHelper (/camera/birdseye)
   └── FastDDS (RMW_IMPLEMENTATION)
 
 Both containers on Docker network "rosnet", communicate via FastDDS multicast.
@@ -219,6 +227,13 @@ g5.xlarge costs ~$1.01/hr on-demand. **Always `terraform destroy` when done.**
 - Implementation plan: `docs/plans/2026-02-19-isaacsim-aws-implementation.md`
 - Isaac Sim gotchas: Claude memory at `~/.claude/projects/.../memory/isaac-sim-gotchas.md`
 
-## Task 17: Nav2 (Future)
+## Future Work
 
-After basic teleop is fully verified, add Nav2 to the ROS2 launch for autonomous waypoint navigation.
+### Task 17: Nav2 Autonomous Navigation (Pending)
+After basic teleop is fully verified and pre-deploy fixes are applied, add Nav2 to the ROS2 launch for autonomous waypoint navigation. The frontend NavGoal component is already built and ready.
+
+### Task 18: Interactive 3D Camera Viewer (Planned)
+Replace the MJPEG camera stream with a WebRTC livestream from Isaac Sim for interactive camera controls (zoom, pan, orbit). This would provide a richer 3D viewing experience in the browser. Explored on 2026-02-23 and deferred — the current MJPEG approach is sufficient for teleop, and WebRTC adds significant complexity (signaling server, STUN/TURN, Isaac Sim rendering API integration).
+
+### Pre-Deploy Fixes (Still Pending)
+The 4 remaining fixes listed above (DDS, nginx trailing slash, gpg --batch, clone dir name) must be applied before the next AWS deployment.

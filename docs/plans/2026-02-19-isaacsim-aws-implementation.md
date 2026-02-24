@@ -1443,8 +1443,9 @@ git commit -m "fix: integration adjustments from smoke test"
 
 ---
 
-## Task 17: Add Nav2 Support (Follow-Up)
+## Task 17: Add Nav2 Support (Pending)
 
+> **Status:** Pending — requires pre-deploy fixes (DDS mismatch, gpg, clone dir) to be applied first.
 > **Prerequisite:** Tasks 1-16 complete and basic teleop works end-to-end.
 
 **Files:**
@@ -1495,6 +1496,29 @@ git commit -m "feat(ros2): add Nav2 bringup for autonomous waypoint navigation"
 
 ---
 
+## Task 18: Interactive 3D Camera Viewer (Planned)
+
+> **Status:** Planned — explored on 2026-02-23, deferred in favor of current MJPEG approach.
+> **Prerequisite:** Tasks 1-16 complete. Optional enhancement.
+
+**Goal:** Replace the MJPEG camera stream with a WebRTC livestream from Isaac Sim, enabling interactive camera controls (zoom, pan, orbit) in the browser.
+
+**Why deferred:** The current MJPEG approach via web_video_server is sufficient for teleop. WebRTC adds significant complexity:
+- Signaling server for WebRTC negotiation
+- STUN/TURN server configuration for NAT traversal
+- Isaac Sim rendering API integration for on-demand viewport rendering
+- Browser-side 3D controls mapped to camera transforms
+
+**When to revisit:** If users need interactive 3D scene exploration beyond the fixed chase-cam and bird's eye views.
+
+**Files (estimated):**
+- New: WebRTC signaling server (Node.js or Python)
+- Modify: `docker/docker-compose.yml` (add signaling service)
+- Modify: `docker/isaac-sim/startup.py` (add WebRTC viewport rendering)
+- Modify: `frontend/src/components/CameraView.tsx` (replace `<img>` with WebRTC `<video>` + controls)
+
+---
+
 ## Summary
 
 | Task | Component | Estimated Complexity |
@@ -1516,5 +1540,6 @@ git commit -m "feat(ros2): add Nav2 bringup for autonomous waypoint navigation"
 | 15 | App layout + entry point | Small |
 | 16 | Deploy + smoke test on AWS | Large (integration) |
 | 17 | Nav2 follow-up | Medium |
+| 18 | Interactive 3D Camera Viewer (WebRTC) | Large (deferred) |
 
 **Critical path:** Tasks 1→7 (Isaac Sim startup script) is the riskiest — OmniGraph API may need adjustments on the real container. Plan for iteration time during Task 16.
