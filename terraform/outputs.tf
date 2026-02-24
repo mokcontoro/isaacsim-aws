@@ -1,3 +1,8 @@
+output "instance_id" {
+  description = "EC2 instance ID (for stop/start scripts)"
+  value       = aws_instance.isaacsim.id
+}
+
 output "public_ip" {
   description = "Public IP address of the Isaac Sim instance"
   value       = aws_eip.isaacsim.public_ip
