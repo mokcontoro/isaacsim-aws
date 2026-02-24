@@ -2,6 +2,7 @@ FROM nvcr.io/nvidia/isaac-sim:5.0.0
 
 # Enable Isaac Sim's internal ROS2 Humble bridge with FastDDS
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+ENV ROS_DISTRO=humble
 ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/isaac-sim/exts/isaacsim.ros2.bridge/humble/lib"
 
 # Enable WebRTC live streaming
