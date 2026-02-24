@@ -6,12 +6,17 @@ services:
     container_name: isaac-sim
     runtime: nvidia
     network_mode: host
+    ipc: host
     environment:
       - ACCEPT_EULA=Y
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
       - ROS_DOMAIN_ID=0
       - PUBLIC_IP=${PUBLIC_IP:-127.0.0.1}
+    volumes:
+      - isaac-cache:/root/.cache/nvidia/GLCache
+      - isaac-data:/root/.local/share/ov/data
+      - isaac-logs:/isaac-sim/kit/logs
     deploy:
       resources:
         reservations:
@@ -26,6 +31,7 @@ services:
       dockerfile: Dockerfile
     container_name: ros2
     network_mode: host
+    ipc: host
     environment:
       - ROS_DOMAIN_ID=0
     volumes:
@@ -55,3 +61,6 @@ services:
 
 volumes:
   frontend-dist:
+  isaac-cache:
+  isaac-data:
+  isaac-logs:
