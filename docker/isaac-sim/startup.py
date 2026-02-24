@@ -102,6 +102,22 @@ world.reset()
 for _ in range(10):
     simulation_app.update()
 
+# -- Diagnostic: inspect prim hierarchy for articulation --
+from pxr import UsdPhysics
+print("=== TurtleBot3 prim hierarchy (physics APIs) ===")
+for prim in stage.Traverse():
+    path = str(prim.GetPath())
+    if "TurtleBot" not in path:
+        continue
+    apis = []
+    if prim.HasAPI(UsdPhysics.ArticulationRootAPI):
+        apis.append("ArticulationRoot")
+    if prim.HasAPI(UsdPhysics.RigidBodyAPI):
+        apis.append("RigidBody")
+    if apis or any(kw in path.split("/")[-1].lower() for kw in ["base", "wheel", "link", "joint"]):
+        print(f"  {path}: {apis if apis else '(no physics API)'}")
+print("=== End diagnostic ===")
+
 # Create render products for cameras
 import omni.replicator.core as rep
 render_product = rep.create.render_product(camera_path, (640, 480))
