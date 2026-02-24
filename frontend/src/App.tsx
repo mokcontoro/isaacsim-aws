@@ -35,10 +35,11 @@ export function App() {
       <main style={{
         display: 'flex',
         flex: 1,
+        minHeight: 0,
         overflow: 'hidden',
       }}>
         {/* Left: Camera feed */}
-        <div style={{ flex: 2, display: 'flex', overflow: 'hidden' }}>
+        <div style={{ flex: 2, display: 'flex', overflow: 'hidden', height: '100%' }}>
           <CameraView />
         </div>
 
