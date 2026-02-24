@@ -59,7 +59,8 @@ print(f"Assets root: {assets_root}")
 warehouse_usd = assets_root + "/Isaac/Environments/Simple_Warehouse/warehouse.usd"
 add_reference_to_stage(usd_path=warehouse_usd, prim_path="/World/Warehouse")
 
-turtlebot_usd = assets_root + "/Isaac/Robots/Turtlebot/turtlebot3_burger.usd"
+# 5.0 asset path: nested under Turtlebot3/ subdirectory
+turtlebot_usd = assets_root + "/Isaac/Robots/Turtlebot/Turtlebot3/turtlebot3_burger.usd"
 add_reference_to_stage(usd_path=turtlebot_usd, prim_path="/World/TurtleBot3")
 
 # Position the robot
@@ -101,22 +102,6 @@ world.reset()
 # Let the stage and physics settle
 for _ in range(10):
     simulation_app.update()
-
-# -- Diagnostic: inspect prim hierarchy for articulation --
-from pxr import UsdPhysics
-print("=== TurtleBot3 prim hierarchy (physics APIs) ===")
-for prim in stage.Traverse():
-    path = str(prim.GetPath())
-    if "TurtleBot" not in path:
-        continue
-    apis = []
-    if prim.HasAPI(UsdPhysics.ArticulationRootAPI):
-        apis.append("ArticulationRoot")
-    if prim.HasAPI(UsdPhysics.RigidBodyAPI):
-        apis.append("RigidBody")
-    if apis or any(kw in path.split("/")[-1].lower() for kw in ["base", "wheel", "link", "joint"]):
-        print(f"  {path}: {apis if apis else '(no physics API)'}")
-print("=== End diagnostic ===")
 
 # Create render products for cameras
 import omni.replicator.core as rep
