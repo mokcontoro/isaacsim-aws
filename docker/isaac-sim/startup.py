@@ -35,9 +35,8 @@ settings.set("/exts/omni.kit.livestream.webrtc/streamPort", 47998)
 
 ext_manager = omni.kit.app.get_app().get_extension_manager()
 
-# Enable WebRTC streaming extensions
+# Enable WebRTC streaming (signaling on 49100, media on 47998/udp)
 ext_manager.set_extension_enabled_immediate("omni.kit.livestream.webrtc", True)
-ext_manager.set_extension_enabled_immediate("omni.services.streamclient.webrtc", True)
 print("WebRTC streaming enabled.")
 
 # Enable ROS2 bridge extension (5.0 namespace)
@@ -56,10 +55,7 @@ if assets_root is None:
 
 print(f"Assets root: {assets_root}")
 
-# -- Build OmniGraph BEFORE World initialization (5.0 requirement) --
-import omni.graph.core as og
-
-# Load scene assets into the stage first (needed for graph references)
+# -- Load scene assets --
 warehouse_usd = assets_root + "/Isaac/Environments/Simple_Warehouse/warehouse.usd"
 add_reference_to_stage(usd_path=warehouse_usd, prim_path="/World/Warehouse")
 
@@ -76,7 +72,7 @@ if turtlebot_prim.IsValid():
     xform.ClearXformOpOrder()
     xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.0))
 
-# Add chase camera for MJPEG PiP (robot-following view)
+# Add chase camera for MJPEG (robot-following view)
 from pxr import Sdf
 camera_path = "/World/TurtleBot3/base_link/FollowCamera"
 camera_prim = stage.DefinePrim(camera_path, "Camera")
@@ -87,20 +83,39 @@ camera_xform.AddRotateXYZOp().Set(Gf.Vec3f(70.0, 0.0, -90.0))
 camera_geom = UsdGeom.Camera(camera_prim)
 camera_geom.GetFocalLengthAttr().Set(14.0)
 
-# Let the stage settle
-for _ in range(5):
+# Add bird's eye camera following robot from above
+birdseye_path = "/World/TurtleBot3/base_link/BirdEyeCamera"
+birdseye_prim = stage.DefinePrim(birdseye_path, "Camera")
+birdseye_xform = UsdGeom.Xformable(birdseye_prim)
+birdseye_xform.ClearXformOpOrder()
+birdseye_xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 1.2))
+birdseye_xform.AddRotateXYZOp().Set(Gf.Vec3f(90.0, 0.0, -90.0))
+birdseye_geom = UsdGeom.Camera(birdseye_prim)
+birdseye_geom.GetFocalLengthAttr().Set(18.0)
+
+# -- Create World and initialize physics BEFORE OmniGraph --
+# World.reset() initializes the physics scene and articulations
+world = World(stage_units_in_meters=1.0)
+world.reset()
+
+# Let the stage and physics settle
+for _ in range(10):
     simulation_app.update()
 
-# Create render product for chase camera (MJPEG only)
+# Create render products for cameras
 import omni.replicator.core as rep
 render_product = rep.create.render_product(camera_path, (640, 480))
 render_product_path = render_product.path if hasattr(render_product, 'path') else str(render_product)
 
+birdseye_render = rep.create.render_product(birdseye_path, (320, 320))
+birdseye_render_path = birdseye_render.path if hasattr(birdseye_render, 'path') else str(birdseye_render)
+
 print(f"Render product path: {render_product_path}")
+print(f"Bird's eye render product path: {birdseye_render_path}")
 
 # -- Configure ROS2 components via OmniGraph --
-# Note: Using 5.0 extension namespaces (isaacsim.ros2.bridge, isaacsim.core.nodes, etc.)
-# Bird's eye camera removed — WebRTC god-view replaces it.
+import omni.graph.core as og
+
 try:
     (ros2_graph, nodes, _, _) = og.Controller.edit(
         {"graph_path": "/World/ROS2Graph", "evaluator_name": "execution"},
@@ -119,8 +134,9 @@ try:
                 # Odometry
                 ("ComputeOdometry", "isaacsim.core.nodes.IsaacComputeOdometry"),
                 ("PublishOdom", "isaacsim.ros2.bridge.ROS2PublishOdometry"),
-                # Chase camera for MJPEG PiP
+                # Cameras
                 ("CameraHelper", "isaacsim.ros2.bridge.ROS2CameraHelper"),
+                ("BirdEyeCameraHelper", "isaacsim.ros2.bridge.ROS2CameraHelper"),
             ],
             og.Controller.Keys.SET_VALUES: [
                 # Twist subscriber
@@ -138,12 +154,18 @@ try:
                 ("PublishOdom.inputs:topicName", "/odom"),
                 ("PublishOdom.inputs:odomFrameId", "odom"),
                 ("PublishOdom.inputs:chassisFrameId", "base_link"),
-                # Chase camera publisher (for MJPEG PiP)
+                # Chase camera publisher
                 ("CameraHelper.inputs:topicName", "/camera/image"),
                 ("CameraHelper.inputs:type", "rgb"),
                 ("CameraHelper.inputs:renderProductPath", render_product_path),
                 ("CameraHelper.inputs:enableSemanticLabels", False),
                 ("CameraHelper.inputs:frameId", "camera_link"),
+                # Bird's eye camera publisher
+                ("BirdEyeCameraHelper.inputs:topicName", "/camera/birdseye"),
+                ("BirdEyeCameraHelper.inputs:type", "rgb"),
+                ("BirdEyeCameraHelper.inputs:renderProductPath", birdseye_render_path),
+                ("BirdEyeCameraHelper.inputs:enableSemanticLabels", False),
+                ("BirdEyeCameraHelper.inputs:frameId", "birdseye_link"),
             ],
             og.Controller.Keys.CONNECT: [
                 # Tick all nodes
@@ -153,6 +175,7 @@ try:
                 ("OnPlaybackTick.outputs:tick", "ComputeOdometry.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "PublishOdom.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "CameraHelper.inputs:execIn"),
+                ("OnPlaybackTick.outputs:tick", "BirdEyeCameraHelper.inputs:execIn"),
                 # Twist subscriber → break vectors → differential controller
                 ("TwistSubscriber.outputs:linearVelocity", "BreakLinearVel.inputs:tuple"),
                 ("BreakLinearVel.outputs:x", "DiffDriveController.inputs:linearVelocity"),
@@ -173,16 +196,14 @@ except Exception as e:
     print(f"WARNING: OmniGraph setup error: {e}", file=sys.stderr)
     print("Simulation will run but ROS2 topics may not work.", file=sys.stderr)
 
-# Create the simulation world and start
-world = World(stage_units_in_meters=1.0)
-world.reset()
+# Start physics playback (enables OnPlaybackTick)
 world.play()
 
 # Let physics and OmniGraph settle
 for _ in range(10):
     simulation_app.update()
 
-print("=== Isaac Sim scene ready. WebRTC streaming active. ===")
+print("=== Isaac Sim scene ready. WebRTC streaming on port 49100. ===")
 
 # Main simulation loop
 while simulation_app.is_running():
