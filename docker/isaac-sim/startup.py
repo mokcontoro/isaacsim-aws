@@ -1,7 +1,7 @@
 """
 Isaac Sim 5.0 standalone script: warehouse scene with TurtleBot3 Burger.
-Runs headless with WebRTC streaming for interactive 3D viewing.
-Enables ROS2 bridge for camera (MJPEG chase cam), odom, and cmd_vel.
+Runs headless with WebRTC signaling server.
+Enables ROS2 bridge for cameras (MJPEG chase + bird's eye), odom, and cmd_vel.
 """
 
 import sys
@@ -205,44 +205,13 @@ except Exception as e:
 world.play()
 
 # Let physics and OmniGraph settle
-for _ in range(30):
+for _ in range(10):
     simulation_app.update()
-
-# -- Diagnostics: verify OmniGraph nodes and execution --
-try:
-    graph = og.get_graph_by_path("/World/ROS2Graph")
-    print(f"Graph valid: {graph.is_valid()}, evaluator: {graph.get_default_graph_context().get_graph().get_evaluator_name() if graph.is_valid() else 'N/A'}")
-    for node_name in ["OnPlaybackTick", "ComputeOdometry", "PublishOdom", "CameraHelper", "ArticulationController"]:
-        node = og.Controller.node(f"/World/ROS2Graph/{node_name}")
-        if node.is_valid():
-            print(f"  Node {node_name}: valid, type={node.get_type_name()}")
-        else:
-            print(f"  Node {node_name}: INVALID")
-    # Check if chassisPrim is properly set
-    odom_node = og.Controller.node("/World/ROS2Graph/ComputeOdometry")
-    if odom_node.is_valid():
-        chassis_attr = odom_node.get_attribute("inputs:chassisPrim")
-        print(f"  ComputeOdometry chassisPrim attr valid: {chassis_attr.is_valid()}")
-    # Check timeline state
-    timeline = omni.timeline.get_timeline_interface()
-    print(f"Timeline playing: {timeline.is_playing()}, stopped: {timeline.is_stopped()}")
-except Exception as diag_e:
-    print(f"Diagnostics error: {diag_e}")
 
 print("=== Isaac Sim scene ready. WebRTC streaming on port 49100. ===")
 
 # Main simulation loop
-step_count = 0
 while simulation_app.is_running():
     world.step(render=True)
-    step_count += 1
-    if step_count == 100:
-        # Check odom output after 100 steps
-        try:
-            odom_node = og.Controller.node("/World/ROS2Graph/ComputeOdometry")
-            pos_attr = odom_node.get_attribute("outputs:position")
-            print(f"After 100 steps - odom position: {og.Controller.get(pos_attr)}")
-        except Exception as e:
-            print(f"Step 100 diagnostic error: {e}")
 
 simulation_app.close()
