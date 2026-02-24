@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { publishTwist, publishStop } from '../lib/ros';
 
 // TurtleBot3 Burger limits
@@ -12,6 +12,7 @@ interface TeleopPadProps {
 export function TeleopPad({ speedScale }: TeleopPadProps) {
   const linear = MAX_LINEAR * speedScale;
   const angular = MAX_ANGULAR * speedScale;
+  const [activeKey, setActiveKey] = useState<string | null>(null);
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -23,14 +24,19 @@ export function TeleopPad({ speedScale }: TeleopPadProps) {
 
       switch (e.key) {
         case 'w': case 'ArrowUp':
+          setActiveKey('W');
           publishTwist(linear, 0); break;
         case 's': case 'ArrowDown':
+          setActiveKey('S');
           publishTwist(-linear, 0); break;
         case 'a': case 'ArrowLeft':
+          setActiveKey('A');
           publishTwist(0, angular); break;
         case 'd': case 'ArrowRight':
+          setActiveKey('D');
           publishTwist(0, -angular); break;
         case ' ':
+          setActiveKey('STOP');
           publishStop(); break;
       }
     },
@@ -40,6 +46,7 @@ export function TeleopPad({ speedScale }: TeleopPadProps) {
   const handleKeyUp = useCallback(
     (e: KeyboardEvent) => {
       if (['w', 's', 'a', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        setActiveKey(null);
         publishStop();
       }
     },
@@ -71,6 +78,11 @@ export function TeleopPad({ speedScale }: TeleopPadProps) {
       <h3 style={{ margin: '0 0 8px' }}>Teleop Controls</h3>
       <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>
         WASD or Arrow Keys &middot; Space = Stop
+        {activeKey && (
+          <span style={{ marginLeft: '8px', color: '#2ecc71', fontWeight: 600 }}>
+            [{activeKey}]
+          </span>
+        )}
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 60px)', gap: '4px', justifyContent: 'center' }}>
         <div />
