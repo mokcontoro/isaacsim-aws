@@ -232,24 +232,12 @@ chase_rotate_op = camera_xform.GetOrderedXformOps()[1]
 birdseye_translate_op = birdseye_xform.GetOrderedXformOps()[0]
 birdseye_rotate_op = birdseye_xform.GetOrderedXformOps()[1]
 
-# Enumerate TurtleBot3 children to find the correct base prim
-print("--- TurtleBot3 prim children ---")
-tb_prim = stage.GetPrimAtPath("/World/TurtleBot3")
-for child in tb_prim.GetChildren():
-    print(f"  {child.GetPath()} (type={child.GetTypeName()})")
-    for grandchild in child.GetChildren():
-        print(f"    {grandchild.GetPath()} (type={grandchild.GetTypeName()})")
-print("--- end prim list ---")
-
-# Use Isaac Sim's XFormPrim which correctly reads physics transforms
+# Use Isaac Sim's XFormPrim on the articulation root link (base_footprint)
+# The reference prim /World/TurtleBot3 stays at origin — PhysX moves base_footprint
 from omni.isaac.core.prims import XFormPrim as IsaacXFormPrim
-try:
-    robot_xform = IsaacXFormPrim(prim_path="/World/TurtleBot3")
-    pos0, rot0 = robot_xform.get_world_pose()
-    print(f"XFormPrim initial pose: pos={pos0}, rot={rot0}")
-except Exception as e:
-    print(f"XFormPrim error: {e}")
-    robot_xform = None
+robot_xform = IsaacXFormPrim(prim_path="/World/TurtleBot3/base_footprint")
+pos0, rot0 = robot_xform.get_world_pose()
+print(f"base_footprint initial pose: pos={pos0}, rot={rot0}")
 
 _diag_counter = 0
 
