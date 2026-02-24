@@ -6,15 +6,18 @@ export function CameraView() {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#1a1a1a' }}>
-      {/* Main chase camera */}
+      {/* Main chase camera — absolute positioning forces fill regardless of MJPEG natural dimensions */}
       <img
         src={videoStreamUrl}
         alt="Robot camera feed"
         style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
           width: '100%',
           height: '100%',
           display: 'block',
-          objectFit: 'cover',
+          objectFit: 'contain',
         }}
         onError={(e) => {
           (e.target as HTMLImageElement).style.display = 'none';
