@@ -232,27 +232,45 @@ chase_rotate_op = camera_xform.GetOrderedXformOps()[1]
 birdseye_translate_op = birdseye_xform.GetOrderedXformOps()[0]
 birdseye_rotate_op = birdseye_xform.GetOrderedXformOps()[1]
 
-base_link_prim = stage.GetPrimAtPath("/World/TurtleBot3/base_link")
-if not base_link_prim.IsValid():
-    print("WARNING: /World/TurtleBot3/base_link not found! Trying /World/TurtleBot3")
-    base_link_prim = stage.GetPrimAtPath("/World/TurtleBot3")
-print(f"Camera follow target prim: {base_link_prim.GetPath()}, valid={base_link_prim.IsValid()}")
+# Enumerate TurtleBot3 children to find the correct base prim
+print("--- TurtleBot3 prim children ---")
+tb_prim = stage.GetPrimAtPath("/World/TurtleBot3")
+for child in tb_prim.GetChildren():
+    print(f"  {child.GetPath()} (type={child.GetTypeName()})")
+    for grandchild in child.GetChildren():
+        print(f"    {grandchild.GetPath()} (type={grandchild.GetTypeName()})")
+print("--- end prim list ---")
+
+# Use Isaac Sim's XFormPrim which correctly reads physics transforms
+from omni.isaac.core.prims import XFormPrim as IsaacXFormPrim
+try:
+    robot_xform = IsaacXFormPrim(prim_path="/World/TurtleBot3")
+    pos0, rot0 = robot_xform.get_world_pose()
+    print(f"XFormPrim initial pose: pos={pos0}, rot={rot0}")
+except Exception as e:
+    print(f"XFormPrim error: {e}")
+    robot_xform = None
 
 _diag_counter = 0
 
 def update_cameras():
-    """Move cameras to follow the robot's base_link each frame."""
+    """Move cameras to follow the robot each frame using physics-aware API."""
     global _diag_counter
-    if not base_link_prim.IsValid():
+    if robot_xform is None:
         return
 
-    # Use Usd.TimeCode.Default() to get the physics-updated transform
-    bl_xformable = UsdGeom.Xformable(base_link_prim)
-    world_mtx = bl_xformable.ComputeLocalToWorldTransform(Usd.TimeCode.Default())
+    import numpy as np
 
-    robot_pos = world_mtx.ExtractTranslation()
-    r = world_mtx.ExtractRotationMatrix()
-    yaw = math.atan2(r[1][0], r[0][0])
+    # get_world_pose returns (position[3], orientation[4] as wxyz quaternion)
+    pos, quat = robot_xform.get_world_pose()
+
+    # Extract yaw from quaternion (w, x, y, z)
+    w, x, y, z = float(quat[0]), float(quat[1]), float(quat[2]), float(quat[3])
+    siny = 2.0 * (w * z + x * y)
+    cosy = 1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(siny, cosy)
+
+    robot_pos = (float(pos[0]), float(pos[1]), float(pos[2]))
 
     # Diagnostic: print every 500 frames
     _diag_counter += 1
