@@ -149,7 +149,7 @@ try:
                 ("DiffDriveController.inputs:wheelRadius", 0.033),
                 ("DiffDriveController.inputs:maxWheelSpeed", 6.67),
                 # Articulation controller (applies to TurtleBot3 wheel joints)
-                ("ArticulationController.inputs:targetPrim", [usdrt.Sdf.Path("/World/TurtleBot3")]),
+                ("ArticulationController.inputs:robotPath", "/World/TurtleBot3"),
                 ("ArticulationController.inputs:jointNames", ["wheel_left_joint", "wheel_right_joint"]),
                 # Odometry compute (chassisPrim is a rel type in 5.0)
                 ("ComputeOdometry.inputs:chassisPrim", [usdrt.Sdf.Path("/World/TurtleBot3")]),
