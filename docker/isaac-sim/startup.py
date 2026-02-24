@@ -1,6 +1,7 @@
 """
-Isaac Sim standalone script: warehouse scene with TurtleBot3 Burger.
-Runs headless, enables ROS2 bridge for camera, odom, and cmd_vel.
+Isaac Sim 5.0 standalone script: warehouse scene with TurtleBot3 Burger.
+Runs headless with WebRTC streaming for interactive 3D viewing.
+Enables ROS2 bridge for camera (MJPEG chase cam), odom, and cmd_vel.
 """
 
 import sys
@@ -12,19 +13,37 @@ sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
 # -- Isaac Sim startup (must happen before other omni imports) --
 from isaacsim import SimulationApp
 
-simulation_app = SimulationApp({"headless": True})
+simulation_app = SimulationApp({"headless": True, "width": 1280, "height": 720})
 
 # -- Now safe to import omni/isaac modules --
 from omni.isaac.core import World
 from omni.isaac.core.utils.stage import add_reference_to_stage
 from omni.isaac.nucleus import get_assets_root_path
 
-# Enable ROS2 bridge extension
 import omni.kit.app
-ext_manager = omni.kit.app.get_app().get_extension_manager()
-ext_manager.set_extension_enabled_immediate("omni.isaac.ros2_bridge", True)
+import carb
 
-# Wait a few frames for extension to initialize
+# -- Configure and enable WebRTC streaming --
+settings = carb.settings.get_settings()
+settings.set("/app/livestream/enabled", True)
+
+# Read PUBLIC_IP from environment (set by docker-compose / start.sh)
+public_ip = os.environ.get("PUBLIC_IP", "127.0.0.1")
+settings.set("/exts/omni.kit.livestream.webrtc/publicIp", public_ip)
+settings.set("/exts/omni.kit.livestream.webrtc/signalPort", 49100)
+settings.set("/exts/omni.kit.livestream.webrtc/streamPort", 47998)
+
+ext_manager = omni.kit.app.get_app().get_extension_manager()
+
+# Enable WebRTC streaming extensions
+ext_manager.set_extension_enabled_immediate("omni.kit.livestream.webrtc", True)
+ext_manager.set_extension_enabled_immediate("omni.services.streamclient.webrtc", True)
+print("WebRTC streaming enabled.")
+
+# Enable ROS2 bridge extension (5.0 namespace)
+ext_manager.set_extension_enabled_immediate("isaacsim.ros2.bridge", True)
+
+# Wait a few frames for extensions to initialize
 for _ in range(10):
     simulation_app.update()
 
@@ -37,14 +56,13 @@ if assets_root is None:
 
 print(f"Assets root: {assets_root}")
 
-# Create the simulation world
-world = World(stage_units_in_meters=1.0)
+# -- Build OmniGraph BEFORE World initialization (5.0 requirement) --
+import omni.graph.core as og
 
-# Load warehouse environment
+# Load scene assets into the stage first (needed for graph references)
 warehouse_usd = assets_root + "/Isaac/Environments/Simple_Warehouse/warehouse.usd"
 add_reference_to_stage(usd_path=warehouse_usd, prim_path="/World/Warehouse")
 
-# Load TurtleBot3 Burger
 turtlebot_usd = assets_root + "/Isaac/Robots/Turtlebot/turtlebot3_burger.usd"
 add_reference_to_stage(usd_path=turtlebot_usd, prim_path="/World/TurtleBot3")
 
@@ -58,54 +76,31 @@ if turtlebot_prim.IsValid():
     xform.ClearXformOpOrder()
     xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.0))
 
-# Add a camera attached to the robot (third-person chase cam)
+# Add chase camera for MJPEG PiP (robot-following view)
 from pxr import Sdf
 camera_path = "/World/TurtleBot3/base_link/FollowCamera"
 camera_prim = stage.DefinePrim(camera_path, "Camera")
 camera_xform = UsdGeom.Xformable(camera_prim)
 camera_xform.ClearXformOpOrder()
-# Position: behind and above the robot (robot faces +X by default)
 camera_xform.AddTranslateOp().Set(Gf.Vec3d(-0.5, 0.0, 0.4))
-# Look forward and slightly down
 camera_xform.AddRotateXYZOp().Set(Gf.Vec3f(70.0, 0.0, -90.0))
-# Set focal length for wider field of view
 camera_geom = UsdGeom.Camera(camera_prim)
 camera_geom.GetFocalLengthAttr().Set(14.0)
-
-# Add bird's eye camera following robot from above
-birdseye_path = "/World/TurtleBot3/base_link/BirdEyeCamera"
-birdseye_prim = stage.DefinePrim(birdseye_path, "Camera")
-birdseye_xform = UsdGeom.Xformable(birdseye_prim)
-birdseye_xform.ClearXformOpOrder()
-# Position: directly above the robot, high enough to see surroundings
-birdseye_xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 1.2))
-# Look straight down (90 degrees pitch)
-birdseye_xform.AddRotateXYZOp().Set(Gf.Vec3f(90.0, 0.0, -90.0))
-# Wider FOV to see more of the warehouse
-birdseye_geom = UsdGeom.Camera(birdseye_prim)
-birdseye_geom.GetFocalLengthAttr().Set(18.0)
 
 # Let the stage settle
 for _ in range(5):
     simulation_app.update()
 
-# Create render products for both cameras
+# Create render product for chase camera (MJPEG only)
 import omni.replicator.core as rep
 render_product = rep.create.render_product(camera_path, (640, 480))
 render_product_path = render_product.path if hasattr(render_product, 'path') else str(render_product)
 
-birdseye_render = rep.create.render_product(birdseye_path, (320, 320))
-birdseye_render_path = birdseye_render.path if hasattr(birdseye_render, 'path') else str(birdseye_render)
-
 print(f"Render product path: {render_product_path}")
-print(f"Bird's eye render product path: {birdseye_render_path}")
 
 # -- Configure ROS2 components via OmniGraph --
-import omni.graph.core as og
-
-# Create the ROS2 action graph
-# Note: ROS2SubscribeTwist outputs double3 vectors, but DifferentialController
-# expects scalar doubles. We use BreakVector3 nodes to extract components.
+# Note: Using 5.0 extension namespaces (isaacsim.ros2.bridge, isaacsim.core.nodes, etc.)
+# Bird's eye camera removed — WebRTC god-view replaces it.
 try:
     (ros2_graph, nodes, _, _) = og.Controller.edit(
         {"graph_path": "/World/ROS2Graph", "evaluator_name": "execution"},
@@ -113,20 +108,19 @@ try:
             og.Controller.Keys.CREATE_NODES: [
                 ("OnPlaybackTick", "omni.graph.action.OnPlaybackTick"),
                 # Twist subscriber
-                ("TwistSubscriber", "omni.isaac.ros2_bridge.ROS2SubscribeTwist"),
+                ("TwistSubscriber", "isaacsim.ros2.bridge.ROS2SubscribeTwist"),
                 # Break twist vectors into scalar components
                 ("BreakLinearVel", "omni.graph.nodes.BreakVector3"),
                 ("BreakAngularVel", "omni.graph.nodes.BreakVector3"),
                 # Differential drive controller
-                ("DiffDriveController", "omni.isaac.wheeled_robots.DifferentialController"),
+                ("DiffDriveController", "isaacsim.robot.wheeled_robots.DifferentialController"),
                 # Articulation controller (applies wheel velocities to robot joints)
-                ("ArticulationController", "omni.isaac.core_nodes.IsaacArticulationController"),
+                ("ArticulationController", "isaacsim.core.nodes.IsaacArticulationController"),
                 # Odometry
-                ("ComputeOdometry", "omni.isaac.core_nodes.IsaacComputeOdometry"),
-                ("PublishOdom", "omni.isaac.ros2_bridge.ROS2PublishOdometry"),
-                # Cameras
-                ("CameraHelper", "omni.isaac.ros2_bridge.ROS2CameraHelper"),
-                ("BirdEyeCameraHelper", "omni.isaac.ros2_bridge.ROS2CameraHelper"),
+                ("ComputeOdometry", "isaacsim.core.nodes.IsaacComputeOdometry"),
+                ("PublishOdom", "isaacsim.ros2.bridge.ROS2PublishOdometry"),
+                # Chase camera for MJPEG PiP
+                ("CameraHelper", "isaacsim.ros2.bridge.ROS2CameraHelper"),
             ],
             og.Controller.Keys.SET_VALUES: [
                 # Twist subscriber
@@ -144,18 +138,12 @@ try:
                 ("PublishOdom.inputs:topicName", "/odom"),
                 ("PublishOdom.inputs:odomFrameId", "odom"),
                 ("PublishOdom.inputs:chassisFrameId", "base_link"),
-                # Chase camera publisher
+                # Chase camera publisher (for MJPEG PiP)
                 ("CameraHelper.inputs:topicName", "/camera/image"),
                 ("CameraHelper.inputs:type", "rgb"),
                 ("CameraHelper.inputs:renderProductPath", render_product_path),
                 ("CameraHelper.inputs:enableSemanticLabels", False),
                 ("CameraHelper.inputs:frameId", "camera_link"),
-                # Bird's eye camera publisher
-                ("BirdEyeCameraHelper.inputs:topicName", "/camera/birdseye"),
-                ("BirdEyeCameraHelper.inputs:type", "rgb"),
-                ("BirdEyeCameraHelper.inputs:renderProductPath", birdseye_render_path),
-                ("BirdEyeCameraHelper.inputs:enableSemanticLabels", False),
-                ("BirdEyeCameraHelper.inputs:frameId", "birdseye_link"),
             ],
             og.Controller.Keys.CONNECT: [
                 # Tick all nodes
@@ -165,12 +153,9 @@ try:
                 ("OnPlaybackTick.outputs:tick", "ComputeOdometry.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "PublishOdom.inputs:execIn"),
                 ("OnPlaybackTick.outputs:tick", "CameraHelper.inputs:execIn"),
-                ("OnPlaybackTick.outputs:tick", "BirdEyeCameraHelper.inputs:execIn"),
                 # Twist subscriber → break vectors → differential controller
-                # Linear: extract x component (forward velocity)
                 ("TwistSubscriber.outputs:linearVelocity", "BreakLinearVel.inputs:tuple"),
                 ("BreakLinearVel.outputs:x", "DiffDriveController.inputs:linearVelocity"),
-                # Angular: extract z component (yaw rate)
                 ("TwistSubscriber.outputs:angularVelocity", "BreakAngularVel.inputs:tuple"),
                 ("BreakAngularVel.outputs:z", "DiffDriveController.inputs:angularVelocity"),
                 # Differential controller → articulation controller (apply to wheels)
@@ -188,7 +173,8 @@ except Exception as e:
     print(f"WARNING: OmniGraph setup error: {e}", file=sys.stderr)
     print("Simulation will run but ROS2 topics may not work.", file=sys.stderr)
 
-# Reset and start the world (play starts the timeline so OnPlaybackTick fires)
+# Create the simulation world and start
+world = World(stage_units_in_meters=1.0)
 world.reset()
 world.play()
 
@@ -196,7 +182,7 @@ world.play()
 for _ in range(10):
     simulation_app.update()
 
-print("=== Isaac Sim scene ready. Simulation running. ===")
+print("=== Isaac Sim scene ready. WebRTC streaming active. ===")
 
 # Main simulation loop
 while simulation_app.is_running():

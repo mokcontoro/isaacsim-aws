@@ -5,14 +5,13 @@ services:
       dockerfile: Dockerfile
     container_name: isaac-sim
     runtime: nvidia
+    network_mode: host
     environment:
       - ACCEPT_EULA=Y
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
-      # ROS2 domain ID (must match ros2 container)
       - ROS_DOMAIN_ID=0
-    networks:
-      - rosnet
+      - PUBLIC_IP=${PUBLIC_IP:-127.0.0.1}
     deploy:
       resources:
         reservations:
@@ -26,26 +25,22 @@ services:
       context: ./ros2
       dockerfile: Dockerfile
     container_name: ros2
+    network_mode: host
     environment:
       - ROS_DOMAIN_ID=0
     volumes:
       - ./ros2/launch:/ros2_ws/launch:ro
     command: ros2 launch /ros2_ws/launch/bringup.launch.py
-    networks:
-      - rosnet
     depends_on:
       - isaac-sim
 
   nginx:
     image: nginx:alpine
     container_name: nginx
-    ports:
-      - "80:80"
+    network_mode: host
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - frontend-dist:/usr/share/nginx/html:ro
-    networks:
-      - rosnet
     depends_on:
       - ros2
       - frontend-build
@@ -60,7 +55,3 @@ services:
 
 volumes:
   frontend-dist:
-
-networks:
-  rosnet:
-    driver: bridge

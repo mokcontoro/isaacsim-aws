@@ -61,11 +61,11 @@ for i in $(seq 1 30); do
   sleep 3
 done
 
-# Start Docker containers
+# Start Docker containers (with PUBLIC_IP for WebRTC)
 echo "Starting Docker containers..."
 ssh -i ~/.ssh/isaacsim-key.pem -o StrictHostKeyChecking=no \
   ubuntu@"$PUBLIC_IP" \
-  "cd /home/ubuntu/isaacsim-aws/docker && docker compose up -d"
+  "cd /home/ubuntu/isaacsim-aws/docker && PUBLIC_IP=$PUBLIC_IP docker compose up -d"
 
 echo ""
 echo "Instance is up! Container startup takes ~2-5 min (shader compile)."

@@ -13,6 +13,10 @@ export default defineConfig({
         target: 'http://localhost:8080',
         rewrite: (path) => path.replace(/^\/video/, ''),
       },
+      '/streaming': {
+        target: 'http://localhost:8211',
+        ws: true,
+      },
     },
   },
 })

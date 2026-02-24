@@ -28,12 +28,9 @@ export const goalPoseTopic = new ROSLIB.Topic({
   messageType: 'geometry_msgs/msg/PoseStamped',
 });
 
-// Video stream URLs (MJPEG via web_video_server through Nginx)
+// Video stream URL (MJPEG via web_video_server through Nginx)
 export const videoStreamUrl =
   `/video/stream?topic=/camera/image&type=mjpeg&quality=80`;
-
-export const birdseyeStreamUrl =
-  `/video/stream?topic=/camera/birdseye&type=mjpeg&quality=80`;
 
 // Publish a Twist message
 export function publishTwist(linear: number, angular: number) {

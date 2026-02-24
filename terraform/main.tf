@@ -66,6 +66,33 @@ resource "aws_security_group" "isaacsim" {
     description = "HTTPS web frontend"
   }
 
+  # WebRTC signaling
+  ingress {
+    from_port   = 49100
+    to_port     = 49100
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ssh_cidr]
+    description = "WebRTC signaling"
+  }
+
+  # WebRTC media stream
+  ingress {
+    from_port   = 47998
+    to_port     = 47998
+    protocol    = "udp"
+    cidr_blocks = [var.allowed_ssh_cidr]
+    description = "WebRTC media stream"
+  }
+
+  # WebRTC HTTP client (backup — normally proxied through nginx:80)
+  ingress {
+    from_port   = 8211
+    to_port     = 8211
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ssh_cidr]
+    description = "WebRTC HTTP client"
+  }
+
   # All outbound
   egress {
     from_port   = 0

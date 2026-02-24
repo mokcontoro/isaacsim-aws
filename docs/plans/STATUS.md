@@ -6,105 +6,70 @@
 
 ---
 
-## Current State: Camera UX Complete, Pre-Deploy Fixes Pending
+## Current State: Isaac Sim 5.0 + WebRTC Upgrade (Untested)
 
-The system deploys and runs on AWS g5.xlarge. Camera feed streams to the browser with third-person chase view and bird's eye picture-in-picture overlay. Robot responds to cmd_vel. The web UI loads but the rosbridge WebSocket shows "Disconnected" due to a DDS mismatch (see Remaining Fixes below). The nginx proxy path fix has been applied locally.
+Upgraded from Isaac Sim 4.2 to 5.0 with native WebRTC streaming for interactive 3D viewing. All containers switched to host networking for WebRTC UDP + DDS compatibility. Not yet deployed — needs first test on EC2.
 
-### What Works (verified on EC2)
-- Isaac Sim 4.2 headless with TurtleBot3 Burger in warehouse scene
-- OmniGraph ROS2 pipeline: cmd_vel → DifferentialController → ArticulationController → wheel joints
-- Camera streaming at 640x480 via ROS2CameraHelper → web_video_server → nginx `/video/`
-- Third-person chase camera attached to robot
-- Bird's eye camera with picture-in-picture overlay (`/camera/birdseye`)
-- Odometry publishing via IsaacComputeOdometry → ROS2PublishOdometry
-- Robot movement verified: sent 0.1 m/s for 3s, robot moved to x=0.311
-- Frontend loads in browser with camera feed, version display in header
+### Architecture
 
-### What's Broken
-1. **Rosbridge WebSocket "Disconnected"** — DDS mismatch: ROS2 container uses `rmw_cyclonedds_cpp`, Isaac Sim uses `rmw_fastrtps_cpp`. Topics won't be visible across containers. **FIX NEEDED**: remove Cyclone DDS from ROS2 Dockerfile (see below).
+```
+Browser → nginx:80
+  ├── /           → React SPA (static files)
+  ├── /ws         → rosbridge WebSocket (localhost:9090)
+  ├── /video/     → web_video_server MJPEG (localhost:8080)
+  └── /streaming/ → Isaac Sim WebRTC client (localhost:8211)
+Browser ←WebRTC UDP→ EC2:49100 (signaling) + EC2:47998 (media)
+All containers use host networking (required for WebRTC UDP + DDS)
+```
+
+### What Changed (v0.3.0)
+- **Isaac Sim 5.0**: Base image `nvcr.io/nvidia/isaac-sim:5.0.0`, new extension namespaces
+- **WebRTC streaming**: LIVESTREAM=1, `omni.kit.livestream.webrtc` + `omni.services.streamclient.webrtc`
+- **Host networking**: All containers use `network_mode: host` (no more Docker bridge)
+- **Frontend**: WebRTC iframe as main view, MJPEG chase cam as PiP overlay, toggle button
+- **Simplified cameras**: Bird's eye camera removed (WebRTC provides interactive god-view with orbit/pan/zoom)
+- **Security group**: WebRTC ports 49100/tcp, 47998/udp, 8211/tcp opened
+- **start.sh**: New helper script auto-detects PUBLIC_IP via EC2 metadata
+- **Pre-deploy fixes applied**: DDS mismatch, nginx trailing slash, gpg --batch, clone dir name
+
+### Risks to Watch
+1. **OmniGraph node names**: 5.0 may use different type strings — same debug process as 4.2
+2. **LD_LIBRARY_PATH**: ROS2 bridge path may differ in 5.0 container filesystem
+3. **WebRTC iframe**: Should work since both served through nginx on same origin
+4. **NVENC**: Verify GPU encoding works headless with `nvidia-smi`
 
 ---
 
-## Remaining Fixes (before next deployment)
+## Completed Tasks
 
-### Fix 1: ROS2 Dockerfile — Remove Cyclone DDS (**CRITICAL**)
-File: `docker/ros2/Dockerfile`
-
-The ROS2 container still has `ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`. Isaac Sim's internal ROS2 bridge ONLY supports FastDDS. Both containers MUST use the same DDS implementation or they cannot see each other's topics.
-
-**Change:**
-```dockerfile
-# REMOVE this line:
-ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-
-# Optionally REMOVE from apt-get (saves image size):
-ros-humble-rmw-cyclonedds-cpp
-```
-
-FastDDS is the default for ROS2 Humble, so no explicit ENV is needed in the ROS2 container.
-
-### Fix 2: nginx WebSocket proxy path (**DONE locally**)
-File: `docker/nginx/nginx.conf` line 37
-
-Changed `proxy_pass http://rosbridge;` → `proxy_pass http://rosbridge/;`
-
-The trailing `/` tells nginx to replace the matched `/ws` prefix with `/`, so rosbridge receives `GET /` instead of `GET /ws`.
-
-### Fix 3: bootstrap.sh — gpg --dearmor needs --batch
-File: `terraform/scripts/bootstrap.sh` lines 22, 29
-
-On non-interactive Ubuntu (cloud-init), `gpg --dearmor` hangs without `--batch` and also fails if the output file already exists. Fix both occurrences:
-
-```bash
-# Line 22:
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# Line 29:
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --batch --yes --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-```
-
-### Fix 4: bootstrap.sh — git clone directory name
-File: `terraform/scripts/bootstrap.sh` line 47
-
-The bootstrap clones to `isaacsim_aws` (underscore) but the actual repo name is `isaacsim-aws` (hyphen). When SSH'ing in, the project is at `/home/ubuntu/isaacsim-aws/`. Update the clone target to match:
-
-```bash
-git clone "${PROJECT_REPO_URL}" isaacsim-aws
-```
-
----
-
-## Completed Tasks (1-15 + Review Fixes + Deployment Iteration)
-
+### v0.1.0–v0.2.0 (Isaac Sim 4.2)
 All code written, reviewed, committed. 20+ commits on `master`.
-
-### Component Status
 
 | Component | Key Files | Status |
 |-----------|-----------|--------|
 | Git repo + skeleton | `.gitignore`, directory structure | Done |
-| Terraform (infra) | `terraform/main.tf`, `variables.tf`, `outputs.tf`, `scripts/bootstrap.sh` | Done (needs Fix 3 & 4) |
-| Docker Compose | `docker/docker-compose.yml` (4 services) | Done |
-| Isaac Sim container | `docker/isaac-sim/Dockerfile`, `startup.py` | Done (battle-tested) |
-| ROS2 container | `docker/ros2/Dockerfile`, `launch/bringup.launch.py` | Done (needs Fix 1) |
-| Nginx reverse proxy | `docker/nginx/nginx.conf` | Done (Fix 2 applied) |
+| Terraform (infra) | `terraform/main.tf`, `variables.tf`, `outputs.tf`, `scripts/bootstrap.sh` | Done |
+| Docker Compose | `docker/docker-compose.yml` | Done |
+| Isaac Sim container | `docker/isaac-sim/Dockerfile`, `startup.py` | Done |
+| ROS2 container | `docker/ros2/Dockerfile`, `launch/bringup.launch.py` | Done |
+| Nginx reverse proxy | `docker/nginx/nginx.conf` | Done |
 | Frontend (React) | `frontend/src/` — App, CameraView, TeleopPad, SpeedSlider, NavGoal, StatusBar, ros.ts | Done |
 
-### Commits Made During Deployment (Task 16)
+### v0.3.0 (Isaac Sim 5.0 + WebRTC)
 
-1. `fix: resolve Isaac Sim startup crashes (DDS + TransformPrim)`
-2. `fix: set LD_LIBRARY_PATH for Isaac Sim internal ROS2 bridge`
-3. `fix: correct OmniGraph attributes and type mismatches in startup.py`
-4. `fix: use correct BreakVector3 node type (not BreakVector3Double)`
-5. `fix: add world.play() and unbuffered stdout for Isaac Sim`
-6. `fix: add ArticulationController to apply wheel velocities to robot`
-
-### Camera UX Improvements (2026-02-23)
-
-7. `feat: attach camera to robot for third-person chase view`
-8. `feat: add bird's eye camera with picture-in-picture overlay`
-9. `fix: bird's eye PiP loading + add version to header`
-10. `fix: bird's eye camera rotation + fill camera view area`
+| File | Change |
+|------|--------|
+| `docker/isaac-sim/Dockerfile` | Base image 5.0, WebRTC env vars + ports |
+| `docker/isaac-sim/startup.py` | 5.0 APIs, WebRTC streaming, single chase cam |
+| `docker/docker-compose.yml` | Host networking, PUBLIC_IP env |
+| `docker/nginx/nginx.conf` | localhost upstreams, /streaming/ proxy |
+| `docker/start.sh` | New — PUBLIC_IP auto-detection helper |
+| `terraform/main.tf` | WebRTC port rules in security group |
+| `scripts/ec2-start.sh` | Pass PUBLIC_IP to docker compose |
+| `frontend/src/components/CameraView.tsx` | WebRTC iframe + MJPEG PiP + toggle |
+| `frontend/src/App.tsx` | Version bump to v0.3.0 |
+| `frontend/vite.config.ts` | /streaming proxy for local dev |
+| `frontend/src/lib/ros.ts` | Remove unused birdseyeStreamUrl |
 
 ---
 
@@ -138,42 +103,39 @@ tail -f /var/log/user-data.log
 ### Start containers (~15 min first time)
 ```bash
 cd /home/ubuntu/isaacsim-aws/docker
-docker compose up -d --build
+./start.sh   # auto-detects PUBLIC_IP, runs docker compose up -d --build
 docker compose logs -f
 ```
 
-**Timing breakdown (first run):**
-- Isaac Sim image pull: ~5 min (27GB)
-- ROS2 image build: ~3 min
-- Frontend build: ~1 min
-- Isaac Sim extension loading: ~2 min
-- RTX shader compilation: ~5 min
-- Asset download from S3: ~5 min
-
-**Timing (subsequent runs, images cached):**
-- Container start: ~30s
-- Extension loading: ~2 min
-- Shader compilation: ~5 min (no cache across recreations)
+Or via the convenience script from your local machine:
+```bash
+./scripts/ec2-start.sh   # starts instance + containers with PUBLIC_IP
+```
 
 ### Verify
 ```bash
 # Check all containers are running
 docker ps
 
-# Check Isaac Sim is ready
-docker logs isaac-sim 2>&1 | grep "scene ready"
+# Check Isaac Sim is ready (look for WebRTC + scene ready)
+docker logs isaac-sim 2>&1 | grep -E "WebRTC|scene ready"
 
 # Check ROS2 topics
 docker exec ros2 bash -c "source /opt/ros/humble/setup.bash && ros2 topic list"
 
-# Expected topics: /cmd_vel, /odom, /camera/image, /rosout, /parameter_events
-
 # Test robot movement
 docker exec ros2 bash -c "source /opt/ros/humble/setup.bash && ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist '{linear: {x: 0.1}, angular: {z: 0.0}}'"
+
+# Verify WebRTC signaling port
+nc -zv <IP> 49100
 ```
 
 ### Browse
-Open `http://<IP>` (NOT https — no TLS configured)
+Open `http://<IP>` in Chrome/Edge:
+- WebRTC 3D viewer loads in main area (orbit=left-click, pan=middle-click, zoom=scroll)
+- MJPEG robot camera shows in PiP corner
+- Toggle "Camera"/"3D View" button to switch views
+- WASD teleop controls still work
 
 ### Tear down (IMPORTANT — $1.01/hr)
 ```bash
@@ -183,36 +145,12 @@ terraform destroy -var="key_name=isaacsim-key" -var="allowed_ssh_cidr=$(curl -s 
 
 ---
 
-## Architecture
-
-```
-Browser ──HTTP──► nginx:80
-                   ├── /        → static frontend (React)
-                   ├── /ws      → rosbridge WebSocket (ros2:9090)
-                   └── /video/  → web_video_server MJPEG (ros2:8080)
-
-isaac-sim container (GPU)          ros2 container
-  ├── TurtleBot3 Burger              ├── rosbridge_websocket :9090
-  ├── Warehouse environment          └── web_video_server :8080
-  ├── OmniGraph ROS2 pipeline
-  │   ├── ROS2SubscribeTwist (/cmd_vel)
-  │   ├── BreakVector3 (x2, type conversion)
-  │   ├── DifferentialController
-  │   ├── ArticulationController
-  │   ├── IsaacComputeOdometry
-  │   ├── ROS2PublishOdometry (/odom)
-  │   ├── ROS2CameraHelper (/camera/image)
-  │   └── ROS2CameraHelper (/camera/birdseye)
-  └── FastDDS (RMW_IMPLEMENTATION)
-
-Both containers on Docker network "rosnet", communicate via FastDDS multicast.
-```
-
 ## Key Architecture Decisions
 
-- **Isaac Sim 4.2** (not latest) — stability and documentation
-- **FastDDS** (not Cyclone) — only DDS available in Isaac Sim 4.2 container
-- **web_video_server** for MJPEG — balanced latency vs. complexity
+- **Isaac Sim 5.0** — native WebRTC streaming, improved ROS2 bridge
+- **Host networking** — required for WebRTC UDP + DDS multicast
+- **FastDDS** (not Cyclone) — only DDS available in Isaac Sim's internal ROS2 bridge
+- **WebRTC (main) + MJPEG PiP** — interactive 3D god-view with robot chase cam overlay
 - **Single Docker Compose** — simplest for demo
 - **Nginx single entry point** — browser connects to one port (80)
 - **TurtleBot3 Burger** — 0.22 m/s max linear, 2.84 rad/s max angular
@@ -230,10 +168,7 @@ g5.xlarge costs ~$1.01/hr on-demand. **Always `terraform destroy` when done.**
 ## Future Work
 
 ### Task 17: Nav2 Autonomous Navigation (Pending)
-After basic teleop is fully verified and pre-deploy fixes are applied, add Nav2 to the ROS2 launch for autonomous waypoint navigation. The frontend NavGoal component is already built and ready.
+After WebRTC viewer is verified, add Nav2 to the ROS2 launch for autonomous waypoint navigation. The frontend NavGoal component is already built and ready.
 
-### Task 18: Interactive 3D Camera Viewer (Planned)
-Replace the MJPEG camera stream with a WebRTC livestream from Isaac Sim for interactive camera controls (zoom, pan, orbit). This would provide a richer 3D viewing experience in the browser. Explored on 2026-02-23 and deferred — the current MJPEG approach is sufficient for teleop, and WebRTC adds significant complexity (signaling server, STUN/TURN, Isaac Sim rendering API integration).
-
-### Pre-Deploy Fixes (Still Pending)
-The 4 remaining fixes listed above (DDS, nginx trailing slash, gpg --batch, clone dir name) must be applied before the next AWS deployment.
+### TURN Server (If Needed)
+Only add if WebRTC fails from restrictive networks. See Phase 6 in the upgrade plan.
