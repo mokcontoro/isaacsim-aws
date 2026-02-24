@@ -232,33 +232,91 @@ chase_rotate_op = camera_xform.GetOrderedXformOps()[1]
 birdseye_translate_op = birdseye_xform.GetOrderedXformOps()[0]
 birdseye_rotate_op = birdseye_xform.GetOrderedXformOps()[1]
 
-# Use Isaac Sim's XFormPrim on the articulation root link (base_footprint)
-# The reference prim /World/TurtleBot3 stays at origin — PhysX moves base_footprint
-from omni.isaac.core.prims import XFormPrim as IsaacXFormPrim
-robot_xform = IsaacXFormPrim(prim_path="/World/TurtleBot3/base_footprint")
-pos0, rot0 = robot_xform.get_world_pose()
-print(f"base_footprint initial pose: pos={pos0}, rot={rot0}")
+# -- Find the right API to read physics-updated robot position --
+# USD stage API and XFormPrim don't see PhysX updates during simulation.
+# Try multiple approaches:
+
+# Approach 1: Dynamic control interface (reads directly from PhysX)
+_dc = None
+_rb_handle = None
+try:
+    from omni.isaac.dynamic_control import _dynamic_control
+    _dc = _dynamic_control.acquire_dynamic_control_interface()
+    _rb_handle = _dc.get_rigid_body("/World/TurtleBot3/base_footprint")
+    if _rb_handle == _dynamic_control.INVALID_HANDLE:
+        print("DC: base_footprint handle INVALID, trying /World/TurtleBot3")
+        _rb_handle = _dc.get_rigid_body("/World/TurtleBot3")
+    if _rb_handle != _dynamic_control.INVALID_HANDLE:
+        pose = _dc.get_rigid_body_pose(_rb_handle)
+        print(f"DC: initial pos=({pose.p.x:.4f},{pose.p.y:.4f},{pose.p.z:.4f})")
+    else:
+        print("DC: could not get rigid body handle")
+        _dc = None
+except Exception as e:
+    print(f"DC: not available: {e}")
+    _dc = None
+
+# Approach 2: Read from Fabric (USDRT) layer — where PhysX writes transforms
+_fabric_prim = None
+try:
+    import usdrt
+    from usdrt import Usd as UsdRT
+    stage_id = omni.usd.get_context().get_stage_id()
+    rt_stage = UsdRT.Stage.Attach(stage_id)
+    _fabric_prim = rt_stage.GetPrimAtPath("/World/TurtleBot3/base_footprint")
+    if _fabric_prim.IsValid():
+        print("Fabric: base_footprint prim found")
+    else:
+        print("Fabric: base_footprint not found, trying TurtleBot3 root")
+        _fabric_prim = rt_stage.GetPrimAtPath("/World/TurtleBot3")
+except Exception as e:
+    print(f"Fabric: not available: {e}")
+    _fabric_prim = None
+
+print(f"Position APIs: DC={_dc is not None}, Fabric={_fabric_prim is not None}")
 
 _diag_counter = 0
 
 def update_cameras():
     """Move cameras to follow the robot each frame using physics-aware API."""
     global _diag_counter
-    if robot_xform is None:
+
+    robot_pos = None
+    yaw = 0.0
+
+    # Try DC interface first (reads directly from PhysX)
+    if _dc is not None and _rb_handle is not None:
+        try:
+            pose = _dc.get_rigid_body_pose(_rb_handle)
+            robot_pos = (pose.p.x, pose.p.y, pose.p.z)
+            # Quaternion to yaw (PhysX quaternion is xyzw)
+            w, x, y, z = pose.r.w, pose.r.x, pose.r.y, pose.r.z
+            siny = 2.0 * (w * z + x * y)
+            cosy = 1.0 - 2.0 * (y * y + z * z)
+            yaw = math.atan2(siny, cosy)
+        except Exception:
+            pass
+
+    # Fallback: try Fabric/USDRT layer
+    if robot_pos is None and _fabric_prim is not None and _fabric_prim.IsValid():
+        try:
+            translate_attr = _fabric_prim.GetAttribute("xformOp:translate")
+            if translate_attr.IsValid():
+                t = translate_attr.Get()
+                robot_pos = (float(t[0]), float(t[1]), float(t[2]))
+            orient_attr = _fabric_prim.GetAttribute("xformOp:orient")
+            if orient_attr.IsValid():
+                q = orient_attr.Get()
+                # USDRT quaternion might be (w,x,y,z) or (x,y,z,w)
+                w, x, y, z = float(q[0]), float(q[1]), float(q[2]), float(q[3])
+                siny = 2.0 * (w * z + x * y)
+                cosy = 1.0 - 2.0 * (y * y + z * z)
+                yaw = math.atan2(siny, cosy)
+        except Exception:
+            pass
+
+    if robot_pos is None:
         return
-
-    import numpy as np
-
-    # get_world_pose returns (position[3], orientation[4] as wxyz quaternion)
-    pos, quat = robot_xform.get_world_pose()
-
-    # Extract yaw from quaternion (w, x, y, z)
-    w, x, y, z = float(quat[0]), float(quat[1]), float(quat[2]), float(quat[3])
-    siny = 2.0 * (w * z + x * y)
-    cosy = 1.0 - 2.0 * (y * y + z * z)
-    yaw = math.atan2(siny, cosy)
-
-    robot_pos = (float(pos[0]), float(pos[1]), float(pos[2]))
 
     # Diagnostic: print every 500 frames
     _diag_counter += 1
