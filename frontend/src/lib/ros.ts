@@ -41,7 +41,6 @@ export function publishTwist(linear: number, angular: number) {
     linear: { x: linear, y: 0, z: 0 },
     angular: { x: 0, y: 0, z: angular },
   });
-  console.log(`[teleop] publish cmd_vel: linear=${linear.toFixed(3)}, angular=${angular.toFixed(3)}`);
   cmdVelTopic.publish(msg);
 }
 
