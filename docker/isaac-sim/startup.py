@@ -100,11 +100,15 @@ log(f"Assets root: {assets_root}")
 
 # -- Load scene assets --
 warehouse_usd = assets_root + "/Isaac/Environments/Simple_Warehouse/warehouse.usd"
+log(f"Loading warehouse: {warehouse_usd}")
 add_reference_to_stage(usd_path=warehouse_usd, prim_path="/World/Warehouse")
+log("Warehouse loaded")
 
 # 5.0 asset path: nested under Turtlebot3/ subdirectory
 turtlebot_usd = assets_root + "/Isaac/Robots/Turtlebot/Turtlebot3/turtlebot3_burger.usd"
+log(f"Loading TurtleBot3: {turtlebot_usd}")
 add_reference_to_stage(usd_path=turtlebot_usd, prim_path="/World/TurtleBot3")
+log("TurtleBot3 loaded")
 
 # Position the robot
 from pxr import Gf, UsdGeom
@@ -138,8 +142,10 @@ CHASE_CAM_OFFSET = Gf.Vec3d(-0.5, 0.0, 0.4)   # behind and above
 CHASE_CAM_ROTATE = Gf.Vec3f(70.0, 0.0, -90.0)  # looking forward-down
 
 # -- Create World and initialize physics BEFORE OmniGraph --
+log("Creating World...")
 world = World(stage_units_in_meters=1.0)
 world.reset()
+log("World created and reset")
 
 # Let the stage and physics settle
 for _ in range(10):
