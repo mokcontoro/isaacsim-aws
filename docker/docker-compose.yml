@@ -6,7 +6,6 @@ services:
     container_name: isaac-sim
     runtime: nvidia
     network_mode: host
-    ipc: host
     environment:
       - ACCEPT_EULA=Y
       - NVIDIA_VISIBLE_DEVICES=all
@@ -14,9 +13,11 @@ services:
       - ROS_DOMAIN_ID=0
       - PUBLIC_IP=${PUBLIC_IP:-127.0.0.1}
     volumes:
-      - isaac-cache:/root/.cache/nvidia/GLCache
-      - isaac-data:/root/.local/share/ov/data
-      - isaac-logs:/isaac-sim/kit/logs
+      - isaac-cache:/isaac-sim/.cache
+      - isaac-computecache:/isaac-sim/.nv/ComputeCache
+      - isaac-data:/isaac-sim/.local/share/ov/data
+      - isaac-logs:/isaac-sim/.nvidia-omniverse/logs
+      - isaac-config:/isaac-sim/.nvidia-omniverse/config
     deploy:
       resources:
         reservations:
@@ -62,5 +63,7 @@ services:
 volumes:
   frontend-dist:
   isaac-cache:
+  isaac-computecache:
   isaac-data:
   isaac-logs:
+  isaac-config:
