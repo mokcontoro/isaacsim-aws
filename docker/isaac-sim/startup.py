@@ -24,13 +24,22 @@ log("Starting SimulationApp...")
 from isaacsim import SimulationApp
 import time as _time
 
-# Skip _wait_for_viewport entirely — in headless Docker, the viewport handle
-# is never set during startup. The _app.update() calls inside the wait loop
-# block indefinitely. The viewport initializes later when the main simulation
-# loop calls simulation_app.update() with actual scene content.
-def _skip_viewport_wait(self):
-    log("  _wait_for_viewport: SKIPPED (headless Docker)")
-SimulationApp._wait_for_viewport = _skip_viewport_wait
+# Replace _wait_for_viewport: run update frames to prime the renderer
+# without waiting for viewport_handle (which is never set in headless Docker).
+# The update calls are necessary to initialize the rendering pipeline.
+def _headless_viewport_init(self):
+    log("  _wait_for_viewport: priming renderer (no viewport handle check)...")
+    t0 = _time.time()
+    for i in range(60):
+        self._app.update()
+        elapsed = _time.time() - t0
+        if elapsed > 120:
+            log(f"  _wait_for_viewport: init frames took {elapsed:.0f}s after {i+1} frames, continuing")
+            break
+        if (i + 1) % 10 == 0:
+            log(f"  _wait_for_viewport: {i+1}/60 frames ({elapsed:.1f}s)")
+    log(f"  _wait_for_viewport: done ({_time.time()-t0:.1f}s)")
+SimulationApp._wait_for_viewport = _headless_viewport_init
 
 # headless=True  → no physical window (Docker has no display)
 # hide_ui=False  → BUT still create the renderable framebuffer for streaming
