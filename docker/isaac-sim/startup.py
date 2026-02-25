@@ -1,6 +1,6 @@
 """
 Isaac Sim 5.0 standalone script: warehouse scene with TurtleBot3 Burger.
-Runs headless with WebRTC signaling server.
+Runs headless with WebRTC livestream for interactive 3D viewing.
 Enables ROS2 bridge for chase camera (MJPEG), odom, and cmd_vel.
 WebRTC provides interactive 3D god-view; MJPEG chase cam is a PiP overlay.
 """
@@ -15,25 +15,32 @@ sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
 # -- Isaac Sim startup (must happen before other omni imports) --
 from isaacsim import SimulationApp
 
-# Use the streaming experience to get a viewport for WebRTC to capture.
-# The base python kit lacks viewport extensions, so the streaming server
-# has nothing to encode. The streaming kit provides the full viewport pipeline.
-simulation_app = SimulationApp(
-    {"headless": True, "width": 1280, "height": 720},
-    experience="/isaac-sim/apps/isaacsim.exp.full.streaming.kit",
-)
+# headless=True  → no physical window (Docker has no display)
+# hide_ui=False  → BUT still create the renderable framebuffer for streaming
+# renderer       → RaytracedLighting for good quality + performance
+# display_options → standard viewport display flags
+simulation_app = SimulationApp({
+    "headless": True,
+    "hide_ui": False,
+    "width": 1280,
+    "height": 720,
+    "renderer": "RaytracedLighting",
+    "display_options": 3286,
+})
 
 # -- Now safe to import omni/isaac modules --
 from omni.isaac.core import World
 from omni.isaac.core.utils.stage import add_reference_to_stage
 from omni.isaac.nucleus import get_assets_root_path
+from isaacsim.core.utils.extensions import enable_extension
 
 import omni.kit.app
 import carb
 
-# -- Configure and enable WebRTC streaming --
+# -- Configure WebRTC streaming settings --
 settings = carb.settings.get_settings()
 settings.set("/app/livestream/enabled", True)
+settings.set("/app/window/drawMouse", True)
 
 # Read PUBLIC_IP from environment (set by docker-compose / start.sh)
 public_ip = os.environ.get("PUBLIC_IP", "127.0.0.1")
@@ -41,11 +48,12 @@ settings.set("/exts/omni.kit.livestream.webrtc/publicIp", public_ip)
 settings.set("/exts/omni.kit.livestream.webrtc/signalPort", 49100)
 settings.set("/exts/omni.kit.livestream.webrtc/streamPort", 47998)
 
-ext_manager = omni.kit.app.get_app().get_extension_manager()
+# Enable NVCF livestream service — this is the official way to enable WebRTC
+# streaming in Isaac Sim 5.0. It wraps omni.kit.livestream.webrtc internally.
+enable_extension("omni.services.livestream.nvcf")
+print(f"WebRTC livestream enabled (publicIp={public_ip})")
 
-# Enable WebRTC streaming (signaling on 49100, media on 47998/udp)
-ext_manager.set_extension_enabled_immediate("omni.kit.livestream.webrtc", True)
-print("WebRTC streaming enabled.")
+ext_manager = omni.kit.app.get_app().get_extension_manager()
 
 # Enable ROS2 bridge extension (5.0 namespace)
 ext_manager.set_extension_enabled_immediate("isaacsim.ros2.bridge", True)
@@ -182,8 +190,8 @@ except Exception as e:
 # Start physics playback (enables OnPlaybackTick)
 world.play()
 
-# Let physics and OmniGraph settle
-for _ in range(10):
+# Let physics, OmniGraph, and streaming settle
+for _ in range(20):
     simulation_app.update()
 
 print("=== Isaac Sim scene ready. WebRTC streaming on port 49100. ===")
