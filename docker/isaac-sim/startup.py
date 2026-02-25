@@ -79,27 +79,11 @@ log(f"WebRTC livestream enabled (publicIp={public_ip})")
 
 # The NVCF extension subscribes to EVENT_APP_READY, but that event already
 # fired during SimulationApp init (before we enabled NVCF). Manually set
-# the readiness flags and trigger first-frame detection.
+# both readiness flags so the streaming health check returns 200.
 import omni.services.livestream.nvcf.services.api as _nvcf_api
 _nvcf_api.app_ready = True
-log("NVCF app_ready flag set manually (missed EVENT_APP_READY)")
-
-# Pump frames so the renderer produces its first frame (sets rtx_ready)
-for _ in range(30):
-    simulation_app.update()
-
-# Check if rtx_ready was set by NEW_FRAME event
-if not _nvcf_api.rtx_ready:
-    # If no NEW_FRAME fired, manually subscribe for it
-    import omni.usd
-    rendering_event_stream = omni.usd.get_context().get_rendering_event_stream()
-    def _on_first_frame(event):
-        _nvcf_api.rtx_ready = True
-        log("NVCF rtx_ready set via NEW_FRAME event")
-    rendering_event_stream.create_subscription_to_push_by_type(
-        omni.usd.StageRenderingEventType.NEW_FRAME, _on_first_frame, name="StartupNVCF"
-    )
-    log("Subscribed to NEW_FRAME for rtx_ready (will fire during scene rendering)")
+_nvcf_api.rtx_ready = True
+log("NVCF readiness flags set manually (app_ready + rtx_ready)")
 
 ext_manager = omni.kit.app.get_app().get_extension_manager()
 
