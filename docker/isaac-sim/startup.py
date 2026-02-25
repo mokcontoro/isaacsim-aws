@@ -22,6 +22,23 @@ def log(msg):
 # -- Isaac Sim startup (must happen before other omni imports) --
 log("Starting SimulationApp...")
 from isaacsim import SimulationApp
+import time as _time
+
+# Instrument SimulationApp constructor to find where it hangs
+_orig_prepare_ui = SimulationApp._prepare_ui
+def _traced_prepare_ui(self):
+    log("  _prepare_ui starting...")
+    _orig_prepare_ui(self)
+    log("  _prepare_ui done")
+SimulationApp._prepare_ui = _traced_prepare_ui
+
+_orig_wait = SimulationApp._wait_for_viewport
+def _traced_wait(self):
+    log("  _wait_for_viewport starting...")
+    t = _time.time()
+    _orig_wait(self)
+    log(f"  _wait_for_viewport done ({_time.time()-t:.1f}s)")
+SimulationApp._wait_for_viewport = _traced_wait
 
 # headless=True  → no physical window (Docker has no display)
 # hide_ui=False  → BUT still create the renderable framebuffer for streaming
