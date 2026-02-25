@@ -22,23 +22,12 @@ def log(msg):
 # -- Isaac Sim startup (must happen before other omni imports) --
 log("Starting SimulationApp...")
 from isaacsim import SimulationApp
-import time as _time
 
 # Replace _wait_for_viewport: run update frames to prime the renderer
-# without waiting for viewport_handle (which is never set in headless Docker).
-# The update calls are necessary to initialize the rendering pipeline.
+# without waiting for viewport_handle (never set in headless Docker).
 def _headless_viewport_init(self):
-    log("  _wait_for_viewport: priming renderer (no viewport handle check)...")
-    t0 = _time.time()
-    for i in range(60):
+    for _ in range(60):
         self._app.update()
-        elapsed = _time.time() - t0
-        if elapsed > 120:
-            log(f"  _wait_for_viewport: init frames took {elapsed:.0f}s after {i+1} frames, continuing")
-            break
-        if (i + 1) % 10 == 0:
-            log(f"  _wait_for_viewport: {i+1}/60 frames ({elapsed:.1f}s)")
-    log(f"  _wait_for_viewport: done ({_time.time()-t0:.1f}s)")
 SimulationApp._wait_for_viewport = _headless_viewport_init
 
 # headless=True  → no physical window (Docker has no display)
