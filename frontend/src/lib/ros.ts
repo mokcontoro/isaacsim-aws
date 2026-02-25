@@ -34,12 +34,13 @@ export const videoStreamUrl =
 
 
 // Publish a Twist message
+// Note: pass plain object directly — ROSLIB.Message is not exported
+// from roslib's CJS bundle and throws at runtime.
 export function publishTwist(linear: number, angular: number) {
-  const msg = new ROSLIB.Message({
+  cmdVelTopic.publish({
     linear: { x: linear, y: 0, z: 0 },
     angular: { x: 0, y: 0, z: angular },
-  });
-  cmdVelTopic.publish(msg);
+  } as ROSLIB.Message);
 }
 
 // Publish a zero-velocity stop command
