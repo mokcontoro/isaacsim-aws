@@ -15,7 +15,13 @@ sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
 # -- Isaac Sim startup (must happen before other omni imports) --
 from isaacsim import SimulationApp
 
-simulation_app = SimulationApp({"headless": True, "width": 1280, "height": 720})
+# Use the streaming experience to get a viewport for WebRTC to capture.
+# The base python kit lacks viewport extensions, so the streaming server
+# has nothing to encode. The streaming kit provides the full viewport pipeline.
+simulation_app = SimulationApp(
+    {"headless": True, "width": 1280, "height": 720},
+    experience="/isaac-sim/apps/isaacsim.exp.full.streaming.kit",
+)
 
 # -- Now safe to import omni/isaac modules --
 from omni.isaac.core import World
