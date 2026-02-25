@@ -24,21 +24,13 @@ log("Starting SimulationApp...")
 from isaacsim import SimulationApp
 import time as _time
 
-# Instrument SimulationApp constructor to find where it hangs
-_orig_prepare_ui = SimulationApp._prepare_ui
-def _traced_prepare_ui(self):
-    log("  _prepare_ui starting...")
-    _orig_prepare_ui(self)
-    log("  _prepare_ui done")
-SimulationApp._prepare_ui = _traced_prepare_ui
-
-_orig_wait = SimulationApp._wait_for_viewport
-def _traced_wait(self):
-    log("  _wait_for_viewport starting...")
-    t = _time.time()
-    _orig_wait(self)
-    log(f"  _wait_for_viewport done ({_time.time()-t:.1f}s)")
-SimulationApp._wait_for_viewport = _traced_wait
+# Skip _wait_for_viewport entirely — in headless Docker, the viewport handle
+# is never set during startup. The _app.update() calls inside the wait loop
+# block indefinitely. The viewport initializes later when the main simulation
+# loop calls simulation_app.update() with actual scene content.
+def _skip_viewport_wait(self):
+    log("  _wait_for_viewport: SKIPPED (headless Docker)")
+SimulationApp._wait_for_viewport = _skip_viewport_wait
 
 # headless=True  → no physical window (Docker has no display)
 # hide_ui=False  → BUT still create the renderable framebuffer for streaming
