@@ -30,8 +30,11 @@ from isaacsim import SimulationApp
 simulation_app = SimulationApp({
     "headless": True,
     "hide_ui": False,
+    "create_new_stage": False,   # Skip _wait_for_viewport (hangs in headless)
     "width": 1280,
     "height": 720,
+    "window_width": 1920,
+    "window_height": 1080,
     "renderer": "RaytracedLighting",
     "display_options": 3286,
 })
@@ -51,6 +54,15 @@ log("Importing kit app + carb...")
 import omni.kit.app
 import carb
 log("All imports done")
+
+# Create a new stage (since we set create_new_stage=False to avoid viewport hang)
+import omni.usd
+omni.usd.get_context().new_stage()
+log("New stage created")
+
+# Let the stage initialize
+for _ in range(5):
+    simulation_app.update()
 
 # -- Configure WebRTC streaming settings --
 settings = carb.settings.get_settings()
