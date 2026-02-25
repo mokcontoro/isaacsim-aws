@@ -39,7 +39,7 @@ resource "aws_security_group" "isaacsim" {
   name_prefix = "isaacsim-"
   description = "Isaac Sim remote control"
 
-  # SSH from allowed IP
+  # SSH from allowed IP only
   ingress {
     from_port   = 22
     to_port     = 22
@@ -48,39 +48,39 @@ resource "aws_security_group" "isaacsim" {
     description = "SSH access"
   }
 
-  # HTTP (web frontend)
+  # HTTP (web frontend) — open to all
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP web frontend"
   }
 
-  # HTTPS (web frontend)
+  # HTTPS (web frontend) — open to all
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS web frontend"
   }
 
-  # WebRTC signaling
+  # WebRTC signaling — open to all
   ingress {
     from_port   = 49100
     to_port     = 49100
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
     description = "WebRTC signaling"
   }
 
-  # WebRTC media stream
+  # WebRTC media stream — open to all
   ingress {
     from_port   = 47998
     to_port     = 47998
     protocol    = "udp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
     description = "WebRTC media stream"
   }
 
@@ -89,7 +89,7 @@ resource "aws_security_group" "isaacsim" {
     from_port   = 8211
     to_port     = 8211
     protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
     description = "WebRTC HTTP client"
   }
 
