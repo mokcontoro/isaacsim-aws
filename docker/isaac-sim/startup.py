@@ -1,5 +1,5 @@
 """
-Isaac Sim 5.0 standalone script: warehouse scene with TurtleBot3 Burger.
+Isaac Sim 5.1 standalone script: warehouse scene with TurtleBot3 Burger.
 Runs headless with WebRTC livestream for interactive 3D viewing.
 Enables ROS2 bridge for chase camera (MJPEG), odom, and cmd_vel.
 WebRTC provides interactive 3D god-view; MJPEG chase cam is a PiP overlay.
@@ -22,29 +22,6 @@ def log(msg):
 # -- Isaac Sim startup (must happen before other omni imports) --
 log("Starting SimulationApp...")
 from isaacsim import SimulationApp
-import time as _time
-
-# Monkey-patch _wait_for_viewport to add a timeout.
-# The original loops forever waiting for viewport_handle, which never arrives
-# in headless mode when shaders are cached (no GPU work → no viewport init).
-_orig_wait = SimulationApp._wait_for_viewport
-def _patched_wait(self):
-    try:
-        from omni.kit.viewport.utility import get_active_viewport
-        if self.config.get("create_new_stage") is False:
-            raise Exception("create_new_stage is False")
-        viewport_api = get_active_viewport()
-        start = _time.time()
-        while viewport_api.frame_info.get("viewport_handle", None) is None:
-            self._app.update()
-            if _time.time() - start > 60:
-                log("WARNING: viewport handle wait timed out after 60s, continuing...")
-                break
-    except Exception:
-        pass
-    for _ in range(10):
-        self._app.update()
-SimulationApp._wait_for_viewport = _patched_wait
 
 # headless=True  → no physical window (Docker has no display)
 # hide_ui=False  → BUT still create the renderable framebuffer for streaming
@@ -88,14 +65,13 @@ settings.set("/exts/omni.kit.livestream.webrtc/publicIp", public_ip)
 settings.set("/exts/omni.kit.livestream.webrtc/signalPort", 49100)
 settings.set("/exts/omni.kit.livestream.webrtc/streamPort", 47998)
 
-# Enable NVCF livestream service — this is the official way to enable WebRTC
-# streaming in Isaac Sim 5.0. It wraps omni.kit.livestream.webrtc internally.
+# Enable NVCF livestream service — wraps omni.kit.livestream.webrtc internally.
 enable_extension("omni.services.livestream.nvcf")
 log(f"WebRTC livestream enabled (publicIp={public_ip})")
 
 ext_manager = omni.kit.app.get_app().get_extension_manager()
 
-# Enable ROS2 bridge extension (5.0 namespace)
+# Enable ROS2 bridge extension
 ext_manager.set_extension_enabled_immediate("isaacsim.ros2.bridge", True)
 
 # Wait a few frames for extensions to initialize
@@ -117,7 +93,7 @@ log(f"Loading warehouse: {warehouse_usd}")
 add_reference_to_stage(usd_path=warehouse_usd, prim_path="/World/Warehouse")
 log("Warehouse loaded")
 
-# 5.0 asset path: nested under Turtlebot3/ subdirectory
+# Asset path: nested under Turtlebot3/ subdirectory
 turtlebot_usd = assets_root + "/Isaac/Robots/Turtlebot/Turtlebot3/turtlebot3_burger.usd"
 log(f"Loading TurtleBot3: {turtlebot_usd}")
 add_reference_to_stage(usd_path=turtlebot_usd, prim_path="/World/TurtleBot3")

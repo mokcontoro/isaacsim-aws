@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/isaac-sim:5.0.0
+FROM nvcr.io/nvidia/isaac-sim:5.1.0
 
 # Enable Isaac Sim's internal ROS2 Humble bridge with FastDDS
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
