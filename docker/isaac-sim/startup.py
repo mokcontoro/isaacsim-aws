@@ -20,6 +20,7 @@ def log(msg):
         f.write(line + "\n")
 
 # -- Isaac Sim startup (must happen before other omni imports) --
+log("Starting SimulationApp...")
 from isaacsim import SimulationApp
 
 # headless=True  → no physical window (Docker has no display)
@@ -34,15 +35,22 @@ simulation_app = SimulationApp({
     "renderer": "RaytracedLighting",
     "display_options": 3286,
 })
+log("SimulationApp ready")
 
 # -- Now safe to import omni/isaac modules --
+log("Importing omni.isaac.core.World...")
 from omni.isaac.core import World
+log("Importing stage utils...")
 from omni.isaac.core.utils.stage import add_reference_to_stage
+log("Importing nucleus...")
 from omni.isaac.nucleus import get_assets_root_path
+log("Importing enable_extension...")
 from isaacsim.core.utils.extensions import enable_extension
 
+log("Importing kit app + carb...")
 import omni.kit.app
 import carb
+log("All imports done")
 
 # -- Configure WebRTC streaming settings --
 settings = carb.settings.get_settings()
