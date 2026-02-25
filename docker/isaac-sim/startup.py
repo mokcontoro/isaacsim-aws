@@ -9,8 +9,15 @@ import sys
 import os
 import math
 
-# Ensure stdout is unbuffered so print() shows in docker logs
-sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', buffering=1)
+# Kit's Python environment may redirect stdout. Use a log file + stderr as fallback.
+LOG_FILE = "/tmp/startup.log"
+
+def log(msg):
+    """Print to stderr + log file so output always appears in docker logs."""
+    line = f"[startup] {msg}"
+    print(line, file=sys.stderr, flush=True)
+    with open(LOG_FILE, "a") as f:
+        f.write(line + "\n")
 
 # -- Isaac Sim startup (must happen before other omni imports) --
 from isaacsim import SimulationApp
@@ -51,7 +58,7 @@ settings.set("/exts/omni.kit.livestream.webrtc/streamPort", 47998)
 # Enable NVCF livestream service — this is the official way to enable WebRTC
 # streaming in Isaac Sim 5.0. It wraps omni.kit.livestream.webrtc internally.
 enable_extension("omni.services.livestream.nvcf")
-print(f"WebRTC livestream enabled (publicIp={public_ip})")
+log(f"WebRTC livestream enabled (publicIp={public_ip})")
 
 ext_manager = omni.kit.app.get_app().get_extension_manager()
 
@@ -65,11 +72,11 @@ for _ in range(10):
 # Get NVIDIA assets root path (Nucleus server or local cache)
 assets_root = get_assets_root_path()
 if assets_root is None:
-    print("ERROR: Could not find assets root path. Check Nucleus connection.", file=sys.stderr)
+    log("ERROR: Could not find assets root path. Check Nucleus connection.")
     simulation_app.close()
     sys.exit(1)
 
-print(f"Assets root: {assets_root}")
+log(f"Assets root: {assets_root}")
 
 # -- Load scene assets --
 warehouse_usd = assets_root + "/Isaac/Environments/Simple_Warehouse/warehouse.usd"
@@ -123,7 +130,7 @@ import omni.replicator.core as rep
 render_product = rep.create.render_product(camera_path, (640, 480))
 render_product_path = render_product.path if hasattr(render_product, 'path') else str(render_product)
 
-print(f"Render product path: {render_product_path}")
+log(f"Render product path: {render_product_path}")
 
 # -- Configure ROS2 components via OmniGraph --
 import omni.graph.core as og
@@ -182,10 +189,10 @@ try:
             ],
         },
     )
-    print("OmniGraph ROS2 pipeline created successfully.")
+    log("OmniGraph ROS2 pipeline created successfully.")
 except Exception as e:
-    print(f"WARNING: OmniGraph setup error: {e}", file=sys.stderr)
-    print("Simulation will run but ROS2 topics may not work.", file=sys.stderr)
+    log(f"WARNING: OmniGraph setup error: {e}")
+    log("Simulation will run but ROS2 topics may not work.")
 
 # Start physics playback (enables OnPlaybackTick)
 world.play()
@@ -194,7 +201,7 @@ world.play()
 for _ in range(20):
     simulation_app.update()
 
-print("=== Isaac Sim scene ready. WebRTC streaming on port 49100. ===")
+log("=== Isaac Sim scene ready. WebRTC streaming on port 49100. ===")
 
 # -- Camera follow setup --
 # Use Dynamic Control interface to read physics-updated transforms.
@@ -209,7 +216,7 @@ dc = _dynamic_control.acquire_dynamic_control_interface()
 # TurtleBot3 prim hierarchy: /World/TurtleBot3/base_footprint/base_link
 # PhysX moves base_footprint (the articulation root link)
 rb_handle = dc.get_rigid_body("/World/TurtleBot3/base_footprint")
-print(f"DC rigid body handle valid: {rb_handle != _dynamic_control.INVALID_HANDLE}")
+log(f"DC rigid body handle valid: {rb_handle != _dynamic_control.INVALID_HANDLE}")
 
 
 def update_chase_camera():
