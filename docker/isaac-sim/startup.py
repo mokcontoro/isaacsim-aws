@@ -68,13 +68,38 @@ settings.set("/app/window/drawMouse", True)
 
 # Read PUBLIC_IP from environment (set by docker-compose / start.sh)
 public_ip = os.environ.get("PUBLIC_IP", "127.0.0.1")
-settings.set("/exts/omni.kit.livestream.webrtc/publicIp", public_ip)
-settings.set("/exts/omni.kit.livestream.webrtc/signalPort", 49100)
-settings.set("/exts/omni.kit.livestream.webrtc/streamPort", 47998)
+# Settings read by carb.livestream-rtc.plugin (native WebRTC backend)
+settings.set("/app/livestream/publicEndpointAddress", public_ip)
+settings.set("/app/livestream/port", 49100)
+settings.set("/app/livestream/fixedHostPort", 47998)
 
 # Enable NVCF livestream service — wraps omni.kit.livestream.webrtc internally.
 enable_extension("omni.services.livestream.nvcf")
 log(f"WebRTC livestream enabled (publicIp={public_ip})")
+
+# The NVCF extension subscribes to EVENT_APP_READY, but that event already
+# fired during SimulationApp init (before we enabled NVCF). Manually set
+# the readiness flags and trigger first-frame detection.
+import omni.services.livestream.nvcf.services.api as _nvcf_api
+_nvcf_api.app_ready = True
+log("NVCF app_ready flag set manually (missed EVENT_APP_READY)")
+
+# Pump frames so the renderer produces its first frame (sets rtx_ready)
+for _ in range(30):
+    simulation_app.update()
+
+# Check if rtx_ready was set by NEW_FRAME event
+if not _nvcf_api.rtx_ready:
+    # If no NEW_FRAME fired, manually subscribe for it
+    import omni.usd
+    rendering_event_stream = omni.usd.get_context().get_rendering_event_stream()
+    def _on_first_frame(event):
+        _nvcf_api.rtx_ready = True
+        log("NVCF rtx_ready set via NEW_FRAME event")
+    rendering_event_stream.create_subscription_to_push_by_type(
+        omni.usd.StageRenderingEventType.NEW_FRAME, _on_first_frame, name="StartupNVCF"
+    )
+    log("Subscribed to NEW_FRAME for rtx_ready (will fire during scene rendering)")
 
 ext_manager = omni.kit.app.get_app().get_extension_manager()
 
