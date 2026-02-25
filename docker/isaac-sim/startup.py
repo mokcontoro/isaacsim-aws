@@ -22,6 +22,29 @@ def log(msg):
 # -- Isaac Sim startup (must happen before other omni imports) --
 log("Starting SimulationApp...")
 from isaacsim import SimulationApp
+import time as _time
+
+# Monkey-patch _wait_for_viewport to add a timeout.
+# The original loops forever waiting for viewport_handle, which never arrives
+# in headless mode when shaders are cached (no GPU work → no viewport init).
+_orig_wait = SimulationApp._wait_for_viewport
+def _patched_wait(self):
+    try:
+        from omni.kit.viewport.utility import get_active_viewport
+        if self.config.get("create_new_stage") is False:
+            raise Exception("create_new_stage is False")
+        viewport_api = get_active_viewport()
+        start = _time.time()
+        while viewport_api.frame_info.get("viewport_handle", None) is None:
+            self._app.update()
+            if _time.time() - start > 60:
+                log("WARNING: viewport handle wait timed out after 60s, continuing...")
+                break
+    except Exception:
+        pass
+    for _ in range(10):
+        self._app.update()
+SimulationApp._wait_for_viewport = _patched_wait
 
 # headless=True  → no physical window (Docker has no display)
 # hide_ui=False  → BUT still create the renderable framebuffer for streaming
@@ -30,7 +53,6 @@ from isaacsim import SimulationApp
 simulation_app = SimulationApp({
     "headless": True,
     "hide_ui": False,
-    "create_new_stage": False,   # Skip _wait_for_viewport (hangs in headless)
     "width": 1280,
     "height": 720,
     "window_width": 1920,
@@ -54,15 +76,6 @@ log("Importing kit app + carb...")
 import omni.kit.app
 import carb
 log("All imports done")
-
-# Create a new stage (since we set create_new_stage=False to avoid viewport hang)
-import omni.usd
-omni.usd.get_context().new_stage()
-log("New stage created")
-
-# Let the stage initialize
-for _ in range(5):
-    simulation_app.update()
 
 # -- Configure WebRTC streaming settings --
 settings = carb.settings.get_settings()
